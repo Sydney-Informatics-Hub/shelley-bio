@@ -122,7 +122,7 @@ def build_module(tool_spec: str) -> bool:
             error_panel = ShelleyStyle.create_error_panel(
                 "Tool Not Found",
                 f"Tool '{tool_name}' not found in CVMFS",
-                f"Try: shelley-bio cvmfs-list {tool_name}"
+                f"Try: shelley-bio versions {tool_name}"
             )
             console.print(error_panel)
             return False
@@ -197,7 +197,6 @@ async def interactive_mode(session: ClientSession):
         {"command": "find <tool>", "description": "Find information about a specific tool", "example": "find fastqc"},
         {"command": "search <description>", "description": "Search for tools by function", "example": "search quality control"},
         {"command": "versions <tool>", "description": "Get available container versions", "example": "versions samtools"},
-        {"command": "cvmfs-list <tool>", "description": "List CVMFS versions for tool", "example": "cvmfs-list blast"},
         {"command": "build <tool\[/ver]>", "description": "Build Lmod module for tool", "example": "build samtools/1.21"},
         {"command": "help", "description": "Show detailed help", "example": "help"},
         {"command": "exit", "description": "Exit interactive mode", "example": "exit"}
@@ -253,7 +252,6 @@ async def interactive_mode(session: ClientSession):
             elif command == "build" and len(parts) > 1:
                 if build_module(parts[1]):
                     print_success("Module built successfully! Exiting interactive mode.")
-                    print_info(f"You can now run: [command]module load <tool>/<version>[/command]")
                     break
                     
             elif command == "build":
@@ -262,14 +260,6 @@ async def interactive_mode(session: ClientSession):
                 print_info("Examples:")
                 print_info("  [command]build fastqc[/command]")
                 print_info("  [command]build samtools/1.21[/command]")
-                
-            elif command == "cvmfs-list" and len(parts) > 1:
-                list_cvmfs_versions(parts[1])
-                
-            elif command == "cvmfs-list":
-                print_warning("Missing tool name")
-                print_info("Usage: [command]cvmfs-list <tool_name>[/command]")
-                print_info("Example: [command]cvmfs-list samtools[/command]")
                 
             else:
                 print_warning(f"Unknown command or missing arguments: '{command}'")
@@ -297,7 +287,6 @@ async def main():
             {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
             {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
             {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
-            {"command": "cvmfs-list <tool_name>", "description": "List CVMFS versions for tool", "example": "shelley-bio cvmfs-list blast"},
             {"command": "build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
             {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"}
         ]
@@ -317,10 +306,6 @@ async def main():
     # Handle CVMFS commands that don't need the MCP server
     if command == "build" and len(sys.argv) > 2:
         build_module(sys.argv[2])
-        return
-    
-    elif command == "cvmfs-list" and len(sys.argv) > 2:
-        list_cvmfs_versions(sys.argv[2])
         return
     
     # Handle commands that need the MCP server

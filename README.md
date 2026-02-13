@@ -38,8 +38,8 @@ shelley-bio find fastqc
 # Search by function
 shelley-bio search "quality control"
 
-# List available tools
-shelley-bio list 20
+# List available versions
+shelley-bio versions samtools
 
 # Build an Lmod module
 shelley-bio build samtools

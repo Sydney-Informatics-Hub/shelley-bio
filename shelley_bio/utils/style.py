@@ -334,8 +334,6 @@ class ShelleyStyle:
             ("List available versions", "shelley-bio versions samtools"),
             ("Build latest version", "shelley-bio build samtools"),
             ("Build specific version", "shelley-bio build samtools/1.21"),
-            ("List CVMFS versions", "shelley-bio cvmfs-list blast"),
-            ("Check tool availability", "shelley-bio cvmfs-list samtools"),
             ("Interactive mode", "shelley-bio interactive")
         ]
         
