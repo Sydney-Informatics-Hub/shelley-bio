@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include requirements.txt
+include pyproject.toml
+include setup.py
+recursive-include shelley_bio *.py
+recursive-include shelley_bio *.yaml
+recursive-include shelley_bio *.json.gz
+recursive-include bin *
+recursive-include docs *.md
+global-exclude *.pyc
+global-exclude __pycache__

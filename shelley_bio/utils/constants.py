@@ -1,0 +1,127 @@
+"""
+Utility constants and functions for query processing.
+"""
+
+STOP_WORDS = {
+
+    # =========================
+    # 1️⃣ General English Stopwords
+    # =========================
+    "general": {
+        "a", "an", "the",
+        "and", "or", "but",
+        "if", "then", "else",
+        "when", "while",
+        "of", "in", "on", "at", "by", "for", "to", "from", "with", "without",
+        "about", "into", "over", "under", "between",
+        "as", "is", "are", "was", "were", "be", "been", "being",
+        "this", "that", "these", "those",
+        "it", "its", "their", "there",
+        "which", "what", "who", "whom", "whose",
+        "can", "could", "should", "would", "may", "might",
+        "will", "shall",
+        "do", "does", "did", "done",
+        "have", "has", "had",
+        "i", "you", "he", "she", "we", "they",
+        "my", "your", "our", "his", "her", "their",
+        "me", "him", "them",
+        "also", "just", "only", "even",
+        "more", "most", "some", "any", "all",
+        "no", "not",
+        "very", "too",
+        "than",
+    },
+
+    # =========================
+    # 2️⃣ Query Structural Words
+    # =========================
+    "query": {
+        "where",
+        "how",
+        "why",
+        "what",
+        "which",
+        "find",
+        "search",
+        "show",
+        "list",
+        "give",
+        "tell",
+        "explain",
+        "describe",
+        "recommend",
+        "suggest",
+        "available",
+        "installed",
+        "version",
+        "latest",
+        "use",
+        "using",
+        "used",
+        "tool",
+        "tools",
+        "software",
+        "program",
+        "package",
+        "application",
+    },
+
+    # =========================
+    # 3️⃣ Bioinformatics Workflow Filler
+    # =========================
+    "bio_workflow": {
+        "data",
+        "dataset",
+        "datasets",
+        "analyse",
+        "analysis",
+        "analyze",
+        "analysing",
+        "processing",
+        "process",
+        #"pipeline",
+        #"workflow",
+        "method",
+        "approach",
+        "technique",
+        "step",
+        "steps",
+        "run",
+        "execute",
+        "build",
+        "make",
+        "create",
+        "generate",
+        "perform",
+        "obtain",
+        "produce",
+        "based",
+        "result",
+        "results",
+        "output",
+        "input",
+        "file",
+        "files",
+    },
+
+    # =========================
+    # 5️⃣ Units / Modifiers
+    # =========================
+    "modifiers": {
+        "high",
+        "low",
+        "large",
+        "small",
+        "big",
+        "fast",
+        "slow",
+        "better",
+        "best",
+        "efficient",
+        "efficiently",
+        "accurate",
+        "accurately",
+        "robust",
+        "robustly",
+    }
+}
