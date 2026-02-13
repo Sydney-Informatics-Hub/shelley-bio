@@ -375,7 +375,7 @@ async def main():
     except Exception as e:
         error_panel = ShelleyStyle.create_error_panel(
             "Connection Error",
-            f"Failed to connect to MCP server: {e}",
+            f"Failed to run shelly-bio: {e}",
             "Check that all dependencies are installed"
         )
         console.print(error_panel)
