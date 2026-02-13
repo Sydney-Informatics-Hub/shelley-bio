@@ -1,8 +1,8 @@
 # Shelley Bio
 
-**A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) bioimage**
+**A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) [bioimage]](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
-Shelley-bio helps researchers using (to be renamed) bioimage virtual machine image. They can use `shelley-bio` to discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
+Shelley-bio helps researchers using (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage) virtual machine image on Nirin and Nectar research cloud platforms. They can use `shelley-bio` to discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
 ## Features
 
@@ -69,7 +69,7 @@ shelley-bio-batch samtools/1.21 fastqc/0.12.1
 
 ## Architecture
 
-Shelley Bio is organized as a modular Python package:
+Shelley Bio is organised as a modular Python package:
 
 ```
 shelley_bio/
@@ -87,9 +87,9 @@ shelley_bio/
 - Lmod (for module management)
 - Singularity/Apptainer (for container execution)
 
-## TODO Migration from bio-finder
+## TODO Migration from [bio-finder](https://github.com/Sydney-Informatics-Hub/bio-finder)
 
-This is a migration from the original bio-finder codebase, the core functionality remains the same with these improvements:
+This is a migration from the original [bio-finder](https://github.com/Sydney-Informatics-Hub/bio-finder) codebase, the core functionality remains the same with these improvements:
 
 - **Professional packaging**: Installable via pip
 - **Improved CLI**: Better user experience and error handling  
