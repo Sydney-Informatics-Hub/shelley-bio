@@ -1,6 +1,6 @@
 # Shelley Bio
 
-**A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) [bioimage]](https://github.com/Sydney-Informatics-Hub/bioimage)**
+**A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
 Shelley-bio helps researchers using (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage) virtual machine image on Nirin and Nectar research cloud platforms. They can use `shelley-bio` to discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
