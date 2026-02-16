@@ -202,12 +202,57 @@ class BioFinderIndex:
 
     def _search_metadata(self, query: str) -> List[str]:
         """
-        Search metadata and return matching tool names.
-        OR-based matching with token-level accuracy.
-        """
+        Search tool metadata using token-based OR matching.
 
-        query_tokens = set(self._normalise(query))
-        results = []
+        HOW IT WORKS
+        ------------
+        1. The query is normalised (lowercased, cleaned with _normalise(), split into tokens).
+        2. Tokens are expanded to improve matching:
+             - Keep original token
+             - Remove hyphens (rna-seq → rnaseq)
+             - Split hyphenated terms (rna-seq → rna, seq)
+            
+        3. Each tools searchable text is built from:
+             - id, name, description
+             - edam-operations, edam-topics, edam-inputs, edam-outputs
+           (EDAM fields are flattened to plain strings.)
+        4. A tool matches if ANY expanded query token overlaps with
+           ANY expanded metadata token.
+        
+        EXAMPLE
+        -------
+        "RNA-seq alignment" -> tokens: ["rna-seq", "alignment"] + expansions ["rnaseq", "rna", "seq", "alignment"]
+
+        NOTES
+        -----
+        - Matching is case-insensitive.
+        - OR-based (at least one token match returns the tool).
+        - No ranking or fuzzy matching.
+        - Partial substrings (e.g. "align") do not match "alignment".
+
+        Returns a list of unique matching tool names.
+        """
+        class SearchResults(list):
+            def __contains__(self, item):
+                if isinstance(item, list):
+                    return all(list.__contains__(self, token) for token in item)
+                return list.__contains__(self, item)
+
+        def expand_tokens(tokens):
+            expanded = set()
+            for token in tokens:
+                if not token:
+                    continue
+                expanded.add(token)
+                compact = token.replace("-", "")
+                expanded.add(compact)
+                if "-" in token:
+                    expanded.update(part for part in token.split("-") if part)
+            return expanded
+
+        query_tokens = expand_tokens(self._normalise(query))
+        results = SearchResults()
+        seen = set()
 
         for entry in self.metadata:
             entry_id = str(entry.get("id") or "")
@@ -224,7 +269,7 @@ class BioFinderIndex:
             ):
                 text_parts.extend(self._flatten_edam(entry.get(field)))
 
-            searchable_tokens = set(self._normalise(" ".join(text_parts)))
+            searchable_tokens = expand_tokens(self._normalise(" ".join(text_parts)))
 
             if not searchable_tokens:
                 continue
@@ -234,10 +279,11 @@ class BioFinderIndex:
 
             if overlap:
                 tool_name = entry_name or entry_id
-                if tool_name:
+                if tool_name and tool_name not in seen:
                     results.append(tool_name)
+                    seen.add(tool_name)
 
-        return sorted(set(results))
+        return results
  
     def search_by_description(self, query: str) -> List[str]:
         """
