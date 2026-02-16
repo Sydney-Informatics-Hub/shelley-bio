@@ -19,7 +19,7 @@ Shelley-bio helps researchers using (to be renamed) [bioimage](https://github.co
 
 ```bash
 # Clone the repository
-git clone https://github.com/shelley-bio/shelley-bio.git
+git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
 cd shelley-bio
 
 # Install dependencies
