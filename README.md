@@ -1,4 +1,4 @@
-# Shelley Bio
+# 🐢> Shelley Bio
 
 **A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
