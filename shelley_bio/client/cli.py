@@ -132,7 +132,6 @@ def build_module(tool_spec: str) -> bool:
         # Build the module
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
             final_tool, final_version, module_file = builder.build_module(tool_spec)
-            print(final_tool, final_version, module_file)
         
         # Display results
         if requested_version is None and len(available_versions) > 1:
