@@ -227,7 +227,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         # Sort versions newest first
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
         return [version for _, version in sorted_versions]
-    
+
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
         """
         List available versions of a tool with their full CVMFS paths.
@@ -264,39 +264,38 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             PermissionError: If unable to create module files
         """
         # Parse tool specification
-        if "/" in tool_spec and force_version is None:
+        if force_version:
+            tool_name, requested_version = tool_spec, force_version
+        elif "/" in tool_spec:
             tool_name, requested_version = tool_spec.split("/", 1)
-        else:
-            tool_name = tool_spec
-            requested_version = force_version
-        
-        # Get available versions
+        elif ":" in tool_spec:
+            tool_name, requested_version = tool_spec.split(":", 1)
+
+        # Get available versions as (tool, full_version) tuples
         available_versions = self._get_available_tools(tool_name)
-        
-        if not available_versions:
-            raise ValueError(f"Tool '{tool_name}' not found in CVMFS")
-        
-        # Determine version to use
-        if requested_version:
-            # Check if requested version exists
-            matching_versions = [
-                (t, v) for t, v in available_versions 
-                if v == requested_version
-            ]
-            if not matching_versions:
-                available_list = [v for _, v in available_versions]
+
+        if requested_version is None:
+            final_tool, final_version = self._get_latest_version(available_versions)
+
+        else:
+            # Match against both full versions ("1.21--h50ea8bc_3") and short ones ("1.21")
+            match = next(
+                (
+                    (tool, ver)
+                    for tool, ver in available_versions
+                    if ver == requested_version or ver.split("--", 1)[0] == requested_version
+                ),
+                None,
+            )
+            if not match:
+                short_versions = sorted({ver.split("--", 1)[0] for _, ver in available_versions})
                 raise ValueError(
                     f"Version '{requested_version}' not found for '{tool_name}'. "
-                    f"Available versions: {', '.join(sorted(available_list))}"
+                    f"Available versions: {', '.join(short_versions)}"
                 )
-            final_tool, final_version = matching_versions[0]
-        else:
-            # Use latest version
-            final_tool, final_version = self._get_latest_version(available_versions)
-        
-        # Create module file
+            final_tool, final_version = match
+
         module_file = self._create_module_file(final_tool, final_version)
-        
         return final_tool, final_version, module_file
 
 
