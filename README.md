@@ -22,6 +22,10 @@ Shelley-bio helps researchers using (to be renamed) [bioimage](https://github.co
 git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
 cd shelley-bio
 
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
 
