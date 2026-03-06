@@ -226,8 +226,10 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         
         # Sort versions newest first
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
-        return [version for _, version in sorted_versions]
-    
+        sorted_versions = [version for _, version in sorted_versions]
+        versions_only = [ v.split("--", 1)[0] for v in sorted_versions ]
+        return sorted_versions + versions_only
+
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
         """
         List available versions of a tool with their full CVMFS paths.
@@ -264,11 +266,15 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             PermissionError: If unable to create module files
         """
         # Parse tool specification
-        if "/" in tool_spec and force_version is None:
-            tool_name, requested_version = tool_spec.split("/", 1)
-        else:
+        if force_version:
             tool_name = tool_spec
             requested_version = force_version
+        if "/" in tool_spec:
+            tool_name, requested_version = tool_spec.split("/", 1)
+        if ":" in tool_spec:
+            tool_name, requested_version = tool_spec.split(":", 1)
+
+        print(tool_spec, tool_name, requested_version)
         
         # Get available versions
         available_versions = self._get_available_tools(tool_name)
