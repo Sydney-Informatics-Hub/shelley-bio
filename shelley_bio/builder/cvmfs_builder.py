@@ -226,9 +226,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         
         # Sort versions newest first
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
-        sorted_versions = [version for _, version in sorted_versions]
-        versions_only = [ v.split("--", 1)[0] for v in sorted_versions ]
-        return sorted_versions + versions_only
+        return [version for _, version in sorted_versions]
 
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
         """
