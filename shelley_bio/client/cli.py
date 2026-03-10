@@ -105,19 +105,20 @@ def build_module(tool_spec: str) -> bool:
     
     # Original build logic for when we already have permissions
     builder = CVMFSModuleBuilder()
-    
+        
     try:
         # Get available versions first for display
         if "/" in tool_spec:
-            tool_name = tool_spec.split("/")[0]
-            requested_version = tool_spec.split("/")[1]
+            tool_name, requested_version = tool_spec.split("/", 1)
+        elif ":" in tool_spec:
+            tool_name, requested_version = tool_spec.split(":", 1)
         else:
-            tool_name = tool_spec
-            requested_version = None
+            tool_name, requested_version = tool_spec, None
         
         with ShelleyStyle.create_status(f"Checking available versions for {tool_name}") as status:
+            # TODO: optimise with tool_name exists check. versions not necessary and slow for tools with a lot of versions
             available_versions = builder.list_versions(tool_name)
-        
+
         if not available_versions:
             error_panel = ShelleyStyle.create_error_panel(
                 "Tool Not Found",
@@ -129,11 +130,8 @@ def build_module(tool_spec: str) -> bool:
         
         # Build the module
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            final_tool, final_version, module_file = builder.build_module(tool_spec)
-        
-        # Refresh module cache
-        with ShelleyStyle.create_status("Refreshing module cache") as status:
-            success, output = builder._refresh_module_cache()
+            final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
+            module_file = builder.create_module_file(final_tool, final_version)
         
         # Display results
         if requested_version is None and len(available_versions) > 1:
@@ -150,6 +148,7 @@ def build_module(tool_spec: str) -> bool:
         return True
         
     except Exception as e:
+        # TODO: This doesn't capture all the errors accurately, e.g. errors in CVMFSModuleBuilder methods
         error_panel = ShelleyStyle.create_error_panel(
             "Build Failed",
             str(e),

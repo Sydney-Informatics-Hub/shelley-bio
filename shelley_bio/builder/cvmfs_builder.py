@@ -100,7 +100,7 @@ class CVMFSModuleBuilder:
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
         return sorted_versions[0]
     
-    def _create_module_file(self, tool_name: str, version: str) -> Path:
+    def create_module_file(self, tool_name: str, version: str) -> Path:
         """
         Create an Lmod module file for the specified tool and version.
         
@@ -227,7 +227,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         # Sort versions newest first
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
         return [version for _, version in sorted_versions]
-    
+
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
         """
         List available versions of a tool with their full CVMFS paths.
@@ -247,58 +247,53 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
                 for _, version in sorted_versions]
     
-    def build_module(self, tool_spec: str, force_version: Optional[str] = None) -> Tuple[str, str, Path]:
+    def search_tool_version(self, tool_name: str, requested_version: Optional[str] = None) -> Tuple[str, str]:
         """
-        Build an Lmod module for a tool.
-        
-        Args:
-            tool_spec: Tool specification like "samtools" or "samtools/1.21"
-            force_version: Force a specific version (overrides tool_spec version)
-            
-        Returns:
-            Tuple of (tool_name, version, module_file_path)
-            
-        Raises:
-            ValueError: If tool not found or version not available
-            RuntimeError: If CVMFS not available
-            PermissionError: If unable to create module files
-        """
-        # Parse tool specification
-        if "/" in tool_spec and force_version is None:
-            tool_name, requested_version = tool_spec.split("/", 1)
-        else:
-            tool_name = tool_spec
-            requested_version = force_version
-        
-        # Get available versions
-        available_versions = self._get_available_tools(tool_name)
-        
-        if not available_versions:
-            raise ValueError(f"Tool '{tool_name}' not found in CVMFS")
-        
-        # Determine version to use
-        if requested_version:
-            # Check if requested version exists
-            matching_versions = [
-                (t, v) for t, v in available_versions 
-                if v == requested_version
-            ]
-            if not matching_versions:
-                available_list = [v for _, v in available_versions]
-                raise ValueError(
-                    f"Version '{requested_version}' not found for '{tool_name}'. "
-                    f"Available versions: {', '.join(sorted(available_list))}"
-                )
-            final_tool, final_version = matching_versions[0]
-        else:
-            # Use latest version
-            final_tool, final_version = self._get_latest_version(available_versions)
-        
-        # Create module file
-        module_file = self._create_module_file(final_tool, final_version)
-        
-        return final_tool, final_version, module_file
+        Searches for a tool name to the requested version or the latest version if not provided.
+        Also handles the case of multiple matching versions.
 
+        Args:
+            tool_name: Name of the tool to search in CVMFS.
+            requested_version: Optional full or short version string to match.
+
+        Returns:
+            A ``(tool_name, version)`` tuple for the selected tool version. 
+            These are the exact inputs required for self.create_module_file.
+
+        Raises:
+            ValueError: If no matching version exists or the request is ambiguous.
+        """
+        # Get available versions as (tool, full_version) tuples
+        available_versions = self._get_available_tools(tool_name)
+
+        if requested_version is None:
+            # If no version was specified, return the latest version
+            final_tool, final_version = self._get_latest_version(available_versions)
+            return final_tool, final_version
+
+        # If a version was provided, match against both full versions ("1.21--h50ea8bc_3") and short ones ("1.21")
+        matches = [
+            (tool, ver)
+            for tool, ver in available_versions
+            if ver == requested_version or ver.split("--", 1)[0] == requested_version
+        ]
+
+        if not matches:
+            short_versions = sorted({ver.split("--", 1)[0] for _, ver in available_versions})
+            raise ValueError(
+                f"Version '{requested_version}' not found for '{tool_name}'. "
+                f"Available versions: {', '.join(short_versions)}"
+            )
+        
+        if len(matches) > 1:
+            # If multiple versions are found. TODO: interactive selection of these.
+            # TODO: Fix rich build failed message suggestion "Check that CVMFS is mounted and the tool exists"
+            raise ValueError(
+                f"Multiple versions found for {tool_name}. "
+                f"Select from the following: {', '.join(ver for _, ver in matches)}"
+            )
+            
+        return matches[0] # Only a single match. yay!
 
 def format_versions_list(versions: List[str]) -> None:
     """Display a formatted list of versions using Rich."""
