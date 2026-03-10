@@ -107,7 +107,6 @@ def build_module(tool_spec: str) -> bool:
     builder = CVMFSModuleBuilder()
         
     try:
-        # TODO: some duplication in CVMFSModuleBuilder.build_module() and CMVMFSModuleBuilder.list_versions()
         # Get available versions first for display
         if "/" in tool_spec:
             tool_name, requested_version = tool_spec.split("/", 1)
@@ -131,7 +130,7 @@ def build_module(tool_spec: str) -> bool:
         
         # Build the module
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            final_tool, final_version = builder.resolve_tool_spec(tool_spec)
+            final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
             module_file = builder.create_module_file(final_tool, final_version)
         
         # Display results
@@ -149,6 +148,7 @@ def build_module(tool_spec: str) -> bool:
         return True
         
     except Exception as e:
+        # TODO: This doesn't capture all the errors accurately, e.g. errors in CVMFSModuleBuilder methods
         error_panel = ShelleyStyle.create_error_panel(
             "Build Failed",
             str(e),

@@ -247,42 +247,27 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
                 for _, version in sorted_versions]
     
-    def resolve_tool_spec(self, tool_spec: str, force_version: Optional[str] = None) -> Tuple[str, str]:
+    def search_tool_version(self, tool_name: str, requested_version: Optional[str] = None) -> Tuple[str, str]:
         """
-        Parse a tool reference and resolve it to a single available CVMFS version.
-
-        The tool can be specified as a bare name or as a name plus version using
-        either ``tool/version`` or ``tool:version``. When ``force_version`` is
-        provided, it overrides any version embedded in ``tool_spec``. Version
-        matching accepts either the full CVMFS version string or the short version
-        prefix before ``--``.
+        Searches for a tool name to the requested version or the latest version if not provided.
+        Also handles the case of multiple matching versions.
 
         Args:
-            tool_spec: Tool name or tool/version reference to resolve.
-            force_version: Optional version to use instead of the version encoded
-                in ``tool_spec``.
+            tool_name: Name of the tool to search in CVMFS.
+            requested_version: Optional full or short version string to match.
 
         Returns:
-            A ``(tool_name, version)`` tuple for the resolved module. If no
-            version is requested, the latest available version is returned.
+            A ``(tool_name, version)`` tuple for the selected tool version. 
+            These are the exact inputs required for self.create_module_file.
 
         Raises:
-            ValueError: If the requested version does not exist or resolves to
-                more than one matching full version.
+            ValueError: If no matching version exists or the request is ambiguous.
         """
-        # Parse tool specification
-        if force_version:
-            tool_name, requested_version = tool_spec, force_version
-        elif "/" in tool_spec:
-            tool_name, requested_version = tool_spec.split("/", 1)
-        elif ":" in tool_spec:
-            tool_name, requested_version = tool_spec.split(":", 1)
-
         # Get available versions as (tool, full_version) tuples
         available_versions = self._get_available_tools(tool_name)
 
         if requested_version is None:
-            # If not version was specified, return the latest version
+            # If no version was specified, return the latest version
             final_tool, final_version = self._get_latest_version(available_versions)
             return final_tool, final_version
 
@@ -301,12 +286,14 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             )
         
         if len(matches) > 1:
+            # If multiple versions are found. TODO: interactive selection of these.
+            # TODO: Fix rich build failed message suggestion "Check that CVMFS is mounted and the tool exists"
             raise ValueError(
                 f"Multiple versions found for {tool_name}. "
                 f"Select from the following: {', '.join(ver for _, ver in matches)}"
             )
             
-        return matches # Single, exact version match
+        return matches[0] # Only a single match. yay!
 
 def format_versions_list(versions: List[str]) -> None:
     """Display a formatted list of versions using Rich."""
