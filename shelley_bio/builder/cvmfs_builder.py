@@ -100,7 +100,7 @@ class CVMFSModuleBuilder:
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
         return sorted_versions[0]
     
-    def _create_module_file(self, tool_name: str, version: str) -> Path:
+    def create_module_file(self, tool_name: str, version: str) -> Path:
         """
         Create an Lmod module file for the specified tool and version.
         
@@ -247,21 +247,28 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
                 for _, version in sorted_versions]
     
-    def build_module(self, tool_spec: str, force_version: Optional[str] = None) -> Tuple[str, str, Path]:
+    def resolve_tool_spec(self, tool_spec: str, force_version: Optional[str] = None) -> Tuple[str, str]:
         """
-        Build an Lmod module for a tool.
-        
+        Parse a tool reference and resolve it to a single available CVMFS version.
+
+        The tool can be specified as a bare name or as a name plus version using
+        either ``tool/version`` or ``tool:version``. When ``force_version`` is
+        provided, it overrides any version embedded in ``tool_spec``. Version
+        matching accepts either the full CVMFS version string or the short version
+        prefix before ``--``.
+
         Args:
-            tool_spec: Tool specification like "samtools" or "samtools/1.21"
-            force_version: Force a specific version (overrides tool_spec version)
-            
+            tool_spec: Tool name or tool/version reference to resolve.
+            force_version: Optional version to use instead of the version encoded
+                in ``tool_spec``.
+
         Returns:
-            Tuple of (tool_name, version, module_file_path)
-            
+            A ``(tool_name, version)`` tuple for the resolved module. If no
+            version is requested, the latest available version is returned.
+
         Raises:
-            ValueError: If tool not found or version not available
-            RuntimeError: If CVMFS not available
-            PermissionError: If unable to create module files
+            ValueError: If the requested version does not exist or resolves to
+                more than one matching full version.
         """
         # Parse tool specification
         if force_version:
@@ -275,29 +282,31 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         available_versions = self._get_available_tools(tool_name)
 
         if requested_version is None:
+            # If not version was specified, return the latest version
             final_tool, final_version = self._get_latest_version(available_versions)
+            return final_tool, final_version
 
-        else:
-            # Match against both full versions ("1.21--h50ea8bc_3") and short ones ("1.21")
-            match = next(
-                (
-                    (tool, ver)
-                    for tool, ver in available_versions
-                    if ver == requested_version or ver.split("--", 1)[0] == requested_version
-                ),
-                None,
+        # If a version was provided, match against both full versions ("1.21--h50ea8bc_3") and short ones ("1.21")
+        matches = [
+            (tool, ver)
+            for tool, ver in available_versions
+            if ver == requested_version or ver.split("--", 1)[0] == requested_version
+        ]
+
+        if not matches:
+            short_versions = sorted({ver.split("--", 1)[0] for _, ver in available_versions})
+            raise ValueError(
+                f"Version '{requested_version}' not found for '{tool_name}'. "
+                f"Available versions: {', '.join(short_versions)}"
             )
-            if not match:
-                short_versions = sorted({ver.split("--", 1)[0] for _, ver in available_versions})
-                raise ValueError(
-                    f"Version '{requested_version}' not found for '{tool_name}'. "
-                    f"Available versions: {', '.join(short_versions)}"
-                )
-            final_tool, final_version = match
-
-        module_file = self._create_module_file(final_tool, final_version)
-        return final_tool, final_version, module_file
-
+        
+        if len(matches) > 1:
+            raise ValueError(
+                f"Multiple versions found for {tool_name}. "
+                f"Select from the following: {', '.join(ver for _, ver in matches)}"
+            )
+            
+        return matches # Single, exact version match
 
 def format_versions_list(versions: List[str]) -> None:
     """Display a formatted list of versions using Rich."""
