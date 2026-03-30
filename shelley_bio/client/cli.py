@@ -116,23 +116,13 @@ def build_module(tool_spec: str) -> bool:
         else:
             tool_name, requested_version = tool_spec, None
         
-        with ShelleyStyle.create_status(f"Checking available versions for {tool_name}") as status:
-            # TODO: optimise with tool_name exists check. versions not necessary and slow for tools with a lot of versions
-            available_versions = builder.list_versions(tool_name)
+        # Resolve version (may prompt interactively — must run outside any Live/spinner context)
+        final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
 
-        if not available_versions:
-            error_panel = ShelleyStyle.create_error_panel(
-                "Tool Not Found",
-                f"Tool '{tool_name}' not found in CVMFS",
-                f"Try: shelley-bio versions {tool_name}"
-            )
-            console.print(error_panel)
-            return False
-        
-        # Build the module
+        # Write the module file
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
             module_file = builder.create_module_file(final_tool, final_version)
+            available_versions = builder.list_versions(tool_name)
         
         # Display results
         if requested_version is None and len(available_versions) > 1:
@@ -150,14 +140,23 @@ def build_module(tool_spec: str) -> bool:
         
     except Exception as e:
         # TODO: This doesn't capture all the errors accurately, e.g. errors in CVMFSModuleBuilder methods
+        # TODO: Write unit test for e.g. build samtools:1.10293891 not found
+        # Default message 
+        title="Build Failed"
+        msg=str(e)
+        suggestion="Check that CVMFS is mounted and the tool exists"
+
+        # Suppress generic suggestion for well-formed "not found" errors
+        if re.search(r"^Version .* not found for", msg):
+            suggestion=""
+
         error_panel = ShelleyStyle.create_error_panel(
-            "Build Failed",
-            str(e),
-            "Check that CVMFS is mounted and the tool exists"
+            title=title,
+            message=msg,
+            suggestion=suggestion
         )
         console.print(error_panel)
         return False
-
 
 def list_cvmfs_versions(tool_name: str) -> None:
     """List available versions of a tool in CVMFS."""
@@ -336,5 +335,37 @@ async def _async_main() -> None:
         sys.exit(1)
 
 
+def main() -> None:
+    """CLI entry point. Sync commands are handled here before entering the event loop."""
+    if len(sys.argv) < 2:
+        console.clear()
+        print_banner()
+        print_rule("Command Usage", "secondary")
+
+        usage_commands = [
+            {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
+            {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
+            {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
+            {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
+            {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"}
+        ]
+
+        usage_table = ShelleyStyle.create_help_table(usage_commands)
+        console.print(usage_table)
+        console.print("\n")
+        console.print(ShelleyStyle.format_command_examples())
+
+        print_rule()
+        print_info("For interactive mode with guided commands: [command]shelley-bio interactive[/command]")
+        sys.exit(1)
+
+    command = sys.argv[1].lower()
+
+    if command == "build" and len(sys.argv) > 2:
+        sys.exit(0 if build_module(sys.argv[2]) else 1)
+
+    asyncio.run(_async_main())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

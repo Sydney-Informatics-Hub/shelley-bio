@@ -5,11 +5,11 @@ CVMFS Module Builder
 Builds Lmod module files for tools available in CVMFS.
 """
 
-import os
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 import re
+import questionary
 
 from ..utils.style import console, ShelleyStyle
 
@@ -246,6 +246,39 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
         return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
                 for _, version in sorted_versions]
+
+    def _select_version_interactively(
+        self,
+        tool_name: str,
+        matches: List[Tuple[str, str]],
+        labels: Optional[List[str]] = None,
+    ) -> Tuple[str, str]:
+        """
+        Prompt the user to pick one build when multiple exist for the same short version.
+
+        Args:
+            tool_name: Name of the tool (used only for display).
+            matches: ``(tool, full_version)`` tuples, sorted newest-first.
+            labels: Optional pre-built display strings (one per match).
+                    Falls back to the raw version string when omitted.
+        """
+        if labels is None:
+            labels = [ver for _, ver in matches]
+
+        choices = [
+            questionary.Choice(title=label, value=match)
+            for label, match in zip(labels, matches)
+        ]
+
+        selected = questionary.select(
+            f"Multiple builds found for {tool_name}. Select one to install:",
+            choices=choices,
+        ).ask()
+
+        if selected is None:
+            raise ValueError("Version selection cancelled.")
+
+        return selected
     
     def search_tool_version(self, tool_name: str, requested_version: Optional[str] = None) -> Tuple[str, str]:
         """
@@ -286,12 +319,28 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             )
         
         if len(matches) > 1:
-            # If multiple versions are found. TODO: interactive selection of these.
-            # TODO: Fix rich build failed message suggestion "Check that CVMFS is mounted and the tool exists"
-            raise ValueError(
-                f"Multiple versions found for {tool_name}. "
-                f"Select from the following: {', '.join(ver for _, ver in matches)}"
-            )
+            from datetime import datetime
+
+            def _mtime(ver: str) -> float:
+                try:
+                    return (self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}").stat().st_mtime
+                except OSError:
+                    return 0.0
+
+            matches_sorted = sorted(matches, key=lambda x: _mtime(x[1]), reverse=True)
+
+            labels = []
+            for _, ver in matches_sorted:
+                path = self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}"
+                try:
+                    stat = path.stat()
+                    size_mb = stat.st_size / (1024 ** 2)
+                    modified = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d")
+                    labels.append(f"{ver}  ({size_mb:.1f} MB, modified {modified})")
+                except OSError:
+                    labels.append(ver)
+
+            return self._select_version_interactively(tool_name, matches_sorted, labels)
             
         return matches[0] # Only a single match. yay!
 

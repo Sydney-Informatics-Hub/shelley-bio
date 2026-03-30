@@ -4,6 +4,7 @@
 import sys
 from pathlib import Path
 from unittest.mock import patch
+import questionary
 
 import pytest
 
@@ -13,8 +14,8 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from shelley_bio.builder.cvmfs_builder import CVMFSModuleBuilder
+from shelley_bio.client.cli import build_module
 
-# TODO: Create a mock available versions
 @pytest.fixture
 def builder() -> CVMFSModuleBuilder:
     """Create a builder instance for unit tests."""
@@ -25,8 +26,8 @@ def builder() -> CVMFSModuleBuilder:
     [('samtools', '1.21'), ('plink2', '2.00a5.12')]
 )
 def test_search_tool_version_multiplebuilds(builder, tool_name, tool_version):
-    # Both of these versions have multiple builds; interactive selection should be triggered.
-    # Mock questionary so the test runs headlessly.
+    # Both of these versions have multiple builds; the interactive prompt should be
+    # triggered. Mock questionary so we can run headlessly and verify the return value.
     with patch("shelley_bio.builder.cvmfs_builder.questionary") as mock_q:
         available = builder._get_available_tools(tool_name)
         matches = [
