@@ -19,7 +19,7 @@ def test_interactive_rendering():
         {"command": "search <description>", "description": "Search for tools by function", "example": "search quality control"},
         {"command": "versions <tool>", "description": "Get available container versions", "example": "versions samtools"},
         {"command": "list [limit]", "description": "List available tools", "example": "list 20"},
-        {"command": "build <tool[/ver]>", "description": "Build Lmod module for tool", "example": "build samtools/1.21"},
+        {"command": r"build <tool\[/ver]>", "description": "Build Lmod module for tool", "example": "build samtools/1.21"},
         {"command": "cvmfs-list <tool>", "description": "List CVMFS versions", "example": "cvmfs-list blast"},
         {"command": "help", "description": "Show detailed help", "example": "help"},
         {"command": "exit", "description": "Exit interactive mode", "example": "exit"}

@@ -8,6 +8,7 @@ Command-line client for querying the CVMFS-MCP server and building modules.
 import asyncio
 import sys
 import json
+import re
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -196,7 +197,7 @@ async def interactive_mode(session: ClientSession):
         {"command": "find <tool>", "description": "Find information about a specific tool", "example": "find fastqc"},
         {"command": "search <description>", "description": "Search for tools by function", "example": "search quality control"},
         {"command": "versions <tool>", "description": "Get available container versions", "example": "versions samtools"},
-        {"command": "build <tool\[/ver]>", "description": "Build Lmod module for tool", "example": "build samtools/1.21"},
+        {"command": r"build <tool\[/ver]>", "description": "Build Lmod module for tool", "example": "build samtools/1.21"},
         {"command": "help", "description": "Show detailed help", "example": "help"},
         {"command": "exit", "description": "Exit interactive mode", "example": "exit"}
     ]
@@ -274,43 +275,12 @@ async def interactive_mode(session: ClientSession):
             print_error(f"Error: {e}")
 
 
-async def main():
-    """Main entry point."""
-    if len(sys.argv) < 2:
-        console.clear()
-        print_banner()
-        print_rule("Command Usage", "secondary")
-        
-        # Usage information
-        usage_commands = [
-            {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
-            {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
-            {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
-            {"command": "build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
-            {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"}
-        ]
-        
-        usage_table = ShelleyStyle.create_help_table(usage_commands)
-        console.print(usage_table)
-        console.print("\n")
-        console.print(ShelleyStyle.format_command_examples())
-        
-        print_rule()
-        print_info("For interactive mode with guided commands: [command]shelley-bio interactive[/command]")
-        sys.exit(1)
-    
-    # Process command
+async def _async_main() -> None:
+    """Handle commands that require the MCP server."""
     command = sys.argv[1].lower()
-    
-    # Handle CVMFS commands that don't need the MCP server
-    if command == "build" and len(sys.argv) > 2:
-        build_module(sys.argv[2])
-        return
-    
-    # Handle commands that need the MCP server
-    # Locate server script
+
     server_script = Path(__file__).parent.parent / "server" / "mcp_server.py"
-    
+
     if not server_script.exists():
         error_panel = ShelleyStyle.create_error_panel(
             "Server Configuration Error",
