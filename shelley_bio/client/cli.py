@@ -14,7 +14,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from ..builder.cvmfs_builder import CVMFSModuleBuilder, format_versions_list, format_build_output
+from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_header, print_success, 
     print_warning, print_error, print_info, print_rule, print_command

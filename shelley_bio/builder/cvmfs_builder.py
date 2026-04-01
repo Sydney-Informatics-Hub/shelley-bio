@@ -10,52 +10,24 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import re
 import questionary
-
-from ..utils.style import console, ShelleyStyle
-
+from datetime import datetime
 
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
-    CVMFS_SINGULARITY_PATH = Path("/cvmfs/singularity.galaxyproject.org/all")
-    LMOD_MODULES_PATH = Path("/apps/Modules/modulefiles")
-    
-    def __init__(self):
-        """Initialize the module builder."""
-        pass
-    
+    def __init__(
+        self,
+        cvmfs_singularity: str = "/cvmfs/singularity.galaxyproject.org/all", 
+        lmod_modules: str = "/apps/Modules/modulefiles"
+    ):
+        self.cvmfs_singularity = cvmfs_singularity
+        self.lmod_modules = lmod_modules
+        self.cvmfs_singularity_path = Path(self.cvmfs_singularity)
+        self.lmod_modules_path = Path(self.lmod_modules)
+
     def _is_cvmfs_available(self) -> bool:
         """Check if CVMFS is mounted and accessible."""
-        return self.CVMFS_SINGULARITY_PATH.exists() and self.CVMFS_SINGULARITY_PATH.is_dir()
-    
-    def _get_available_tools(self, tool_name: str) -> List[Tuple[str, str]]:
-        """
-        Get available versions of a tool from CVMFS.
-        
-        Args:
-            tool_name: Name of the tool to search for
-            
-        Returns:
-            List of (tool_name, version) tuples
-        """
-        if not self._is_cvmfs_available():
-            raise RuntimeError("CVMFS not available at /cvmfs/singularity.galaxyproject.org/all")
-        
-        # Search for containers matching the tool name
-        try:
-            containers = []
-            for item in self.CVMFS_SINGULARITY_PATH.iterdir():
-                if item.is_file() or item.is_symlink():
-                    # Container names are like "samtools:1.22" 
-                    name = item.name
-                    if ":" in name:
-                        container_tool, version = name.split(":", 1)
-                        if container_tool.lower() == tool_name.lower():
-                            containers.append((container_tool, version))
-            
-            return containers
-        except (OSError, PermissionError) as e:
-            raise RuntimeError(f"Failed to read CVMFS directory: {e}")
+        return self.cvmfs_singularity_path.exists() and self.cvmfs_singularity_path.is_dir()
     
     def _parse_version(self, version_str: str) -> Tuple[int, ...]:
         """
@@ -83,6 +55,39 @@ class CVMFSModuleBuilder:
         
         return tuple(parts)
     
+    def _sort_versions(self, versions: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+        """Sort versions by semantic versioning, newest first."""
+        return sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+    
+    def _get_available_tools(self, tool_name: str) -> List[Tuple[str, str]]:
+        """
+        Get available versions of a tool from CVMFS.
+        
+        Args:
+            tool_name: Name of the tool to search for
+            
+        Returns:
+            List of (tool_name, version) tuples
+        """
+        if not self._is_cvmfs_available():
+            raise RuntimeError("CVMFS not available at /cvmfs/singularity.galaxyproject.org/all")
+        
+        # Search for containers matching the tool name
+        try:
+            containers = []
+            for item in self.cvmfs_singularity_path.iterdir():
+                if item.is_file() or item.is_symlink():
+                    # Container names are like "samtools:1.22" 
+                    name = item.name
+                    if ":" in name:
+                        container_tool, version = name.split(":", 1)
+                        if container_tool.lower() == tool_name.lower():
+                            containers.append((container_tool, version))
+            
+            return containers
+        except (OSError, PermissionError) as e:
+            raise RuntimeError(f"Failed to read CVMFS directory: {e}")
+    
     def _get_latest_version(self, versions: List[Tuple[str, str]]) -> Tuple[str, str]:
         """
         Get the latest version from a list of versions.
@@ -97,7 +102,7 @@ class CVMFSModuleBuilder:
             raise ValueError("No versions provided")
         
         # Sort by version, latest first
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+        sorted_versions = self._sort_versions(versions)
         return sorted_versions[0]
     
     def create_module_file(self, tool_name: str, version: str) -> Path:
@@ -115,7 +120,7 @@ class CVMFSModuleBuilder:
             PermissionError: If unable to write to module directory
         """
         # Create module directory
-        module_dir = self.LMOD_MODULES_PATH / tool_name
+        module_dir = self.lmod_modules_path / tool_name
         module_file = module_dir / f"{version}.lua"
         
         try:
@@ -127,7 +132,7 @@ class CVMFSModuleBuilder:
             )
         
         # Container path
-        container_path = f"/cvmfs/singularity.galaxyproject.org/all/{tool_name}:{version}"
+        container_path = f"{self.cvmfs_singularity_path}/{tool_name}:{version}"
         
         # Module content
         module_content = f'''help([[{tool_name.title()} {version} from CVMFS
@@ -179,7 +184,6 @@ end
 -- Generic function to run any command in the container
 set_alias("{tool_name}_exec", container_exec("$*"))
 '''
-        
         try:
             module_file.write_text(module_content)
         except PermissionError:
@@ -225,7 +229,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             return []
         
         # Sort versions newest first
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+        sorted_versions = self._sort_versions(versions)
         return [version for _, version in sorted_versions]
 
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
@@ -238,14 +242,9 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         Returns:
             List of (version, full_path) tuples
         """
-        versions = self._get_available_tools(tool_name)
-        if not versions:
-            return []
-        
-        # Sort versions newest first and create full paths
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
-        return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
-                for _, version in sorted_versions]
+        sorted_versions = self.list_versions(tool_name)
+        return [(version, str(self.cvmfs_singularity_path / f"{tool_name}:{version}"))
+                for version in sorted_versions]
 
     def _select_version_interactively(
         self,
@@ -319,11 +318,9 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             )
         
         if len(matches) > 1:
-            from datetime import datetime
-
             def _mtime(ver: str) -> float:
                 try:
-                    return (self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}").stat().st_mtime
+                    return (self.cvmfs_singularity_path / f"{tool_name}:{ver}").stat().st_mtime
                 except OSError:
                     return 0.0
 
@@ -331,7 +328,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
 
             labels = []
             for _, ver in matches_sorted:
-                path = self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}"
+                path = self.cvmfs_singularity_path / f"{tool_name}:{ver}"
                 try:
                     stat = path.stat()
                     size_mb = stat.st_size / (1024 ** 2)
@@ -342,41 +339,4 @@ set_alias("{tool_name}_exec", container_exec("$*"))
 
             return self._select_version_interactively(tool_name, matches_sorted, labels)
             
-        return matches[0] # Only a single match. yay!
-
-def format_versions_list(versions: List[str]) -> None:
-    """Display a formatted list of versions using Rich."""
-    if not versions:
-        console.print(ShelleyStyle.create_info_panel("No Versions", "No versions found for this tool"))
-        return
-    
-    # Create a nice table of versions
-    from rich.table import Table
-    
-    table = Table(
-        title="[header]Available Versions[/header]",
-        show_header=True,
-        header_style="table.header",
-        border_style="border"
-    )
-    
-    table.add_column("Version", style="version")
-    table.add_column("Status", style="success")
-    
-    for version in versions:
-        table.add_row(version, "✓ Available")
-    
-    console.print(table)
-
-
-def format_build_output(
-    tool_name: str, 
-    version: str, 
-    module_file: Path, 
-    available_versions: List[str], 
-    requested_version: Optional[str] = None
-) -> None:
-    """Display formatted build output using Rich."""
-    # This function is now handled by the ShelleyStyle class methods
-    # in the CLI client, so we just pass through
-    pass
+        return matches[0]
