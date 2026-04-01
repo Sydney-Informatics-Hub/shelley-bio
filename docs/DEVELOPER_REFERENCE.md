@@ -54,21 +54,10 @@ the Bioconda convention: `<version>--<build_string>`.
 
 ## Developer setup
 
-Optionally, you may use a `venv` for development in a self-contained environment.
+When developing, you may need to rebuild the `shelley-bio` to capture the changes made:
 
 ```bash
-# Clone the repository
-git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
-cd shelley-bio
-
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install the package
+# Install dev version in editable mode
 pip install -e .
 ```
 
