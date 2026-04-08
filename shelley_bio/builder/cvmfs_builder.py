@@ -72,9 +72,8 @@ class CVMFSModuleBuilder:
             List of (tool_name, version) tuples
         """
         if not self._is_cvmfs_available():
-            raise RuntimeError("CVMFS not available at /cvmfs/singularity.galaxyproject.org/all")
-        
-        # Search for containers matching the tool name
+            raise RuntimeError(f"CVMFS not available at {self.cvmfs_singularity}")
+
         try:
             containers = []
             for item in self.cvmfs_singularity_path.iterdir():
@@ -106,18 +105,6 @@ class CVMFSModuleBuilder:
         # Sort by version, latest first
         sorted_versions = self._sort_versions(versions)
         return sorted_versions[0]
-    
-
-    def _get_shpc_module_base(self) -> Path:
-        """Return the shpc module_base directory from shpc config, falling back to the configured default."""
-        try:
-            result = subprocess.run(
-                ["shpc", "config", "get", "module_base"],
-                capture_output=True, text=True, check=True
-            )
-            return Path(result.stdout.strip())
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return self.lmod_modules_path
 
     def _compute_sha256(self, path: str) -> str:
         """Compute the SHA-256 digest of a file (e.g. a SIF container)."""
@@ -132,7 +119,7 @@ class CVMFSModuleBuilder:
         lower = output.lower()
         return any(p in lower for p in [
             "not found", "not in registry", "does not exist",
-            "is not known", "no container", "unknown tag",
+            "is not a known identifier", "no container", "unknown tag",
         ])
 
     def _run_shpc_install(self, uri_tag: str, container_path: str) -> Tuple[int, str]:
@@ -146,28 +133,6 @@ class CVMFSModuleBuilder:
             capture_output=True, text=True,
         )
         return result.returncode, result.stdout + result.stderr
-
-    def _symlink_simplified_module(self, tool_name: str, version: str) -> None:
-        """
-        Create a symlink so users can run `module load <tool>/<version>` instead
-        of `module load quay.io/biocontainers/<tool>/<version>`.
-
-        shpc view install is not used here because it re-pulls the container from
-        Docker rather than reusing the --keep-path CVMFS install.
-
-        Creates:
-            <module_base>/<tool>/<version>.lua
-              -> <module_base>/quay.io/biocontainers/<tool>/<version>/module.lua
-        """
-        module_base = self._get_shpc_module_base()
-        src = module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
-        dest_dir = module_base / tool_name
-        dest = dest_dir / f"{version}.lua"
-
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        if dest.exists() or dest.is_symlink():
-            dest.unlink()
-        dest.symlink_to(src)
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
@@ -211,16 +176,18 @@ class CVMFSModuleBuilder:
         """
         Install a CVMFS container as a functional Lmod module using shpc.
 
-        Replaces the broken create_module_file().  shpc generates both the
-        .lua module file and real wrapper scripts that put tool binaries on
-        $PATH after `module load`.
+        shpc generates both the .lua module file and real wrapper scripts that
+        put tool binaries on $PATH after `module load`.
 
         Steps:
           1. shpc install <uri>:<tag> <cvmfs-path> --keep-path
           2. If the tag is absent from the registry, create a local registry
              entry (fetching upstream container.yaml + computed SHA-256) and retry.
-          3. Symlink <module_base>/<tool>/<version>.lua -> shpc module.lua so
+          3. Symlink <lmod_modules>/<tool>/<version>.lua -> shpc module.lua so
              `module load <tool>/<version>` works.
+
+        shpc view install is not used — it re-pulls from Docker rather than
+        reusing the --keep-path CVMFS install.
 
         Returns:
             Path to the symlinked .lua file (the user-facing module path).
@@ -241,11 +208,20 @@ class CVMFSModuleBuilder:
                     f"shpc install failed for {uri_tag}:\n{output.strip()}"
                 )
 
-        self._symlink_simplified_module(tool_name, version)
+        shpc_module_base = Path(subprocess.run(
+            ["shpc", "config", "get", "module_base"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip())
+        src = shpc_module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
+        dest_dir = self.lmod_modules_path / tool_name
+        dest = dest_dir / f"{version}.lua"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+        dest.symlink_to(src)
 
-        module_base = self._get_shpc_module_base()
-        return module_base / tool_name / f"{version}.lua"
-    
+        return dest
+
     def list_versions(self, tool_name: str) -> List[str]:
         """
         List available versions of a tool without creating a module.
@@ -321,8 +297,8 @@ class CVMFSModuleBuilder:
             requested_version: Optional full or short version string to match.
 
         Returns:
-            A ``(tool_name, version)`` tuple for the selected tool version. 
-            These are the exact inputs required for self.create_module_file.
+            A ``(tool_name, version)`` tuple for the selected tool version.
+            These are the exact inputs required for self.shpc_install.
 
         Raises:
             ValueError: If no matching version exists or the request is ambiguous.
