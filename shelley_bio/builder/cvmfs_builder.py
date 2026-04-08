@@ -5,7 +5,9 @@ CVMFS Module Builder
 Builds Lmod module files for tools available in CVMFS.
 """
 
+import hashlib
 import subprocess
+import yaml
 from pathlib import Path
 from typing import List, Optional, Tuple
 import re
@@ -105,114 +107,144 @@ class CVMFSModuleBuilder:
         sorted_versions = self._sort_versions(versions)
         return sorted_versions[0]
     
-    def create_module_file(self, tool_name: str, version: str) -> Path:
-        """
-        Create an Lmod module file for the specified tool and version.
-        
-        Args:
-            tool_name: Name of the tool
-            version: Version of the tool
-            
-        Returns:
-            Path to the created module file
-            
-        Raises:
-            PermissionError: If unable to write to module directory
-        """
-        # Create module directory
-        module_dir = self.lmod_modules_path / tool_name
-        module_file = module_dir / f"{version}.lua"
-        
-        try:
-            module_dir.mkdir(parents=True, exist_ok=True)
-        except PermissionError:
-            raise PermissionError(
-                f"Permission denied creating module directory: {module_dir}\n"
-                f"You must run this command with sudo privileges."
-            )
-        
-        # Container path
-        container_path = f"{self.cvmfs_singularity_path}/{tool_name}:{version}"
-        
-        # Module content
-        module_content = f'''help([[{tool_name.title()} {version} from CVMFS
 
-This module provides access to {tool_name} version {version} via Singularity container.
-All executables from the container are available in your PATH.
-
-Usage examples:
-  For BLAST: blastn, blastp, blastx, tblastn, tblastx
-  For other tools: see container documentation
-
-Container path: {container_path}
-]])
-
-load("singularity")
-
-local containerPath = "{container_path}"
-
--- Function to execute commands in container
-local function container_exec(cmd)
-    return "singularity exec " .. containerPath .. " " .. cmd
-end
-
--- Add container executables to PATH via wrapper functions
-prepend_path("PATH", pathJoin(os.getenv("MODULEPATH") or "", "..", "wrappers", "{tool_name}", "{version}"))
-
--- Create primary alias for the tool name (if executable exists)
-set_alias("{tool_name}", container_exec("{tool_name}"))
-
--- For tools with known multiple executables, create additional aliases
-if "{tool_name}" == "blast" then
-    set_alias("blastn", container_exec("blastn"))
-    set_alias("blastp", container_exec("blastp"))
-    set_alias("blastx", container_exec("blastx"))
-    set_alias("tblastn", container_exec("tblastn"))
-    set_alias("tblastx", container_exec("tblastx"))
-    set_alias("makeblastdb", container_exec("makeblastdb"))
-    set_alias("blast_formatter", container_exec("blast_formatter"))
-end
-
-if "{tool_name}" == "samtools" then
-    set_alias("samtools", container_exec("samtools"))
-end
-
-if "{tool_name}" == "fastqc" then
-    set_alias("fastqc", container_exec("fastqc"))
-end
-
--- Generic function to run any command in the container
-set_alias("{tool_name}_exec", container_exec("$*"))
-'''
-        try:
-            module_file.write_text(module_content)
-        except PermissionError:
-            raise PermissionError(
-                f"Permission denied writing module file: {module_file}\n"
-                f"You must run this command with sudo privileges."
-            )
-        
-        return module_file
-    
-    def _refresh_module_cache(self) -> Tuple[bool, str]:
-        """
-        Refresh the Lmod module cache.
-        
-        Returns:
-            Tuple of (success, output)
-        """
+    def _get_shpc_module_base(self) -> Path:
+        """Return the shpc module_base directory from shpc config, falling back to the configured default."""
         try:
             result = subprocess.run(
-                ["module", "--ignore_cache", "avail"],
-                capture_output=True,
-                text=True,
-                check=False
+                ["shpc", "config", "get", "module_base"],
+                capture_output=True, text=True, check=True
             )
-            return True, result.stderr  # module avail outputs to stderr
-        except FileNotFoundError:
-            return False, "Lmod not available (module command not found)"
-        except Exception as e:
-            return False, f"Error running module command: {e}"
+            return Path(result.stdout.strip())
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return self.lmod_modules_path
+
+    def _compute_sha256(self, path: str) -> str:
+        """Compute the SHA-256 digest of a file (e.g. a SIF container)."""
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _is_registry_miss(self, output: str) -> bool:
+        """Return True if shpc output indicates the tag is absent from the registry."""
+        lower = output.lower()
+        return any(p in lower for p in [
+            "not found", "not in registry", "does not exist",
+            "is not known", "no container", "unknown tag",
+        ])
+
+    def _run_shpc_install(self, uri_tag: str, container_path: str) -> Tuple[int, str]:
+        """
+        Run: shpc install <uri_tag> <container_path> --keep-path
+
+        Returns (returncode, combined stdout+stderr).
+        """
+        result = subprocess.run(
+            ["shpc", "install", uri_tag, container_path, "--keep-path"],
+            capture_output=True, text=True,
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def _symlink_simplified_module(self, tool_name: str, version: str) -> None:
+        """
+        Create a symlink so users can run `module load <tool>/<version>` instead
+        of `module load quay.io/biocontainers/<tool>/<version>`.
+
+        shpc view install is not used here because it re-pulls the container from
+        Docker rather than reusing the --keep-path CVMFS install.
+
+        Creates:
+            <module_base>/<tool>/<version>.lua
+              -> <module_base>/quay.io/biocontainers/<tool>/<version>/module.lua
+        """
+        module_base = self._get_shpc_module_base()
+        src = module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
+        dest_dir = module_base / tool_name
+        dest = dest_dir / f"{version}.lua"
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if dest.exists() or dest.is_symlink():
+            dest.unlink()
+        dest.symlink_to(src)
+
+    def _ensure_local_registry_entry(
+        self, tool_name: str, version: str, container_path: str, uri: str,
+        local_registry: str = "/apps/local",
+    ) -> None:
+        """
+        Create or update a local shpc registry entry for a CVMFS-only tag.
+
+        Fetches the upstream container.yaml for the URI if available, then
+        appends the missing tag+SHA256.  If the tool is entirely absent from
+        the upstream registry a minimal container.yaml is created instead.
+        """
+        registry_dir = Path(local_registry) / uri
+        registry_yaml = registry_dir / "container.yaml"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+
+        # Try to pull the existing upstream entry
+        remote_url = (
+            f"https://raw.githubusercontent.com/singularityhub/shpc-registry/main/{uri}/container.yaml"
+        )
+        fetch = subprocess.run(
+            ["curl", "-fsSL", remote_url, "-o", str(registry_yaml)],
+            capture_output=True, text=True,
+        )
+
+        if fetch.returncode != 0 or not registry_yaml.exists():
+            # Tool not in upstream registry — create a minimal config
+            config: dict = {"docker": uri, "tags": {}, "filter": [version], "aliases": []}
+        else:
+            with open(registry_yaml) as f:
+                config = yaml.safe_load(f) or {}
+
+        # Append the missing tag
+        if version not in config.get("tags", {}):
+            sha256 = self._compute_sha256(container_path)
+            config.setdefault("tags", {})[version] = f"sha256:{sha256}"
+            with open(registry_yaml, "w") as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    def shpc_install(self, tool_name: str, version: str) -> Path:
+        """
+        Install a CVMFS container as a functional Lmod module using shpc.
+
+        Replaces the broken create_module_file().  shpc generates both the
+        .lua module file and real wrapper scripts that put tool binaries on
+        $PATH after `module load`.
+
+        Steps:
+          1. shpc install <uri>:<tag> <cvmfs-path> --keep-path
+          2. If the tag is absent from the registry, create a local registry
+             entry (fetching upstream container.yaml + computed SHA-256) and retry.
+          3. Symlink <module_base>/<tool>/<version>.lua -> shpc module.lua so
+             `module load <tool>/<version>` works.
+
+        Returns:
+            Path to the symlinked .lua file (the user-facing module path).
+        """
+        uri = f"quay.io/biocontainers/{tool_name}"
+        uri_tag = f"{uri}:{version}"
+        container_path = str(self.cvmfs_singularity_path / f"{tool_name}:{version}")
+
+        returncode, output = self._run_shpc_install(uri_tag, container_path)
+
+        if returncode != 0:
+            if self._is_registry_miss(output):
+                self._ensure_local_registry_entry(tool_name, version, container_path, uri)
+                returncode, output = self._run_shpc_install(uri_tag, container_path)
+
+            if returncode != 0:
+                raise RuntimeError(
+                    f"shpc install failed for {uri_tag}:\n{output.strip()}"
+                )
+
+        self._symlink_simplified_module(tool_name, version)
+
+        module_base = self._get_shpc_module_base()
+        return module_base / tool_name / f"{version}.lua"
     
     def list_versions(self, tool_name: str) -> List[str]:
         """

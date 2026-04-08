@@ -119,9 +119,9 @@ def build_module(tool_spec: str) -> bool:
         # Resolve version (may prompt interactively — must run outside any Live/spinner context)
         final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
 
-        # Write the module file
+        # Install via shpc (creates wrapper scripts + .lua module file)
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            module_file = builder.create_module_file(final_tool, final_version)
+            module_file = builder.shpc_install(final_tool, final_version)
             available_versions = builder.list_versions(tool_name)
         
         # Display results
