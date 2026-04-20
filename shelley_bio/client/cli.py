@@ -11,24 +11,113 @@ import json
 import re
 from pathlib import Path
 
+from rich.panel import Panel
+from rich.table import Table
+from rich.box import ROUNDED
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..utils.style import (
-    console, ShelleyStyle, print_banner, print_header, print_success, 
+    console, ShelleyStyle, print_banner, print_header, print_success,
     print_warning, print_error, print_info, print_rule, print_command
 )
+
+
+def _render_find_tool(payload: dict) -> None:
+    """Render find_tool JSON payload using Rich components."""
+    query = payload.get("query", "unknown")
+
+    if not payload.get("found"):
+        console.print(ShelleyStyle.create_error_panel(
+            "Tool Not Found",
+            f"No tool or container matching '{query}' was found.",
+            "Try: shelley-bio search <description>",
+        ))
+        return
+
+    tool = payload.get("tool")
+    containers = payload.get("containers")
+
+    # Tool info panel
+    lines = []
+    if tool:
+        if tool.get("description"):
+            lines.append(f"[header]Description[/header]\n[muted]{tool['description']}[/muted]\n")
+        if tool.get("homepage"):
+            lines.append(f"[header]Homepage[/header]    [info]{tool['homepage']}[/info]\n")
+        if tool.get("operations"):
+            lines.append(f"[header]Operations[/header]  [muted]{', '.join(tool['operations'])}[/muted]\n")
+        if tool.get("inputs"):
+            lines.append(f"[header]Inputs[/header]      [muted]{', '.join(tool['inputs'])}[/muted]\n")
+        if tool.get("outputs"):
+            lines.append(f"[header]Outputs[/header]     [muted]{', '.join(tool['outputs'])}[/muted]\n")
+
+    title_name = tool.get("name") if tool else query
+    console.print(Panel(
+        "\n".join(lines) if lines else "[muted]No metadata available for this tool.[/muted]",
+        title=f"[tool]{title_name}[/tool]",
+        box=ROUNDED,
+        border_style="primary",
+        padding=(1, 2),
+    ))
+
+    if containers and containers.get("available"):
+        lmod_path = Path("/apps/Modules/modulefiles")
+        tool_id = tool.get("id", query) if tool else query
+
+        table = Table(
+            title="[header]Available Versions[/header]",
+            box=ROUNDED,
+            border_style="primary",
+            header_style="table.header",
+            show_lines=False,
+        )
+        table.add_column("Version", style="version", no_wrap=True)
+        table.add_column("Status", no_wrap=True)
+
+        for version in containers["recent_versions"]:
+            installed = (lmod_path / tool_id / f"{version}.lua").exists()
+            status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
+            table.add_row(version, status)
+
+        total = containers["total_versions"]
+        shown = len(containers["recent_versions"])
+        if total > shown:
+            table.add_row(
+                f"[muted]+ {total - shown} more[/muted]",
+                f"[muted]shelley-bio versions {tool_id}[/muted]",
+            )
+
+        console.print(table)
+
+        console.print(Panel(
+            f"[command]{containers['install_command']}[/command]",
+            title="[header]Install[/header]",
+            box=ROUNDED,
+            border_style="info",
+            padding=(0, 2),
+        ))
+    else:
+        console.print(ShelleyStyle.create_warning_panel(
+            "No Containers Available",
+            "No Singularity containers found for this tool in CVMFS.",
+        ))
 
 
 async def query_tool(session: ClientSession, tool_name: str):
     """Query for a specific tool."""
     with ShelleyStyle.create_status(f"Searching for tool: {tool_name}") as status:
         result = await session.call_tool("find_tool", {"tool_name": tool_name})
-    
+
     for content in result.content:
         if hasattr(content, 'text'):
-            console.print(content.text)
+            try:
+                payload = json.loads(content.text)
+                _render_find_tool(payload)
+            except json.JSONDecodeError:
+                console.print(content.text)
 
 
 async def search_function(session: ClientSession, description: str, limit: int = 10):

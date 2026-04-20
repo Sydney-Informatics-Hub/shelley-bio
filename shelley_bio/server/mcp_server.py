@@ -431,48 +431,48 @@ async def list_tools() -> list[Tool]:
 
 
 def _handle_find_tool(tool_name: str) -> str:
-    result = index.search_tool(tool_name)
-    parts = []
+    clean_name = re.sub(r'\b\d[\d.]*\b', '', tool_name).strip()
+    result = index.search_tool(clean_name)
 
-    if result['metadata']:
-        meta = result['metadata']
-        parts.append(f"\n{'='*70}\n")
-        parts.append(f"🧬 {meta.get('name', tool_name.upper())}\n")
-        parts.append(f"{'='*70}\n\n")
-        if meta.get('description'):
-            parts.append(f"📝 Description:\n   {meta['description']}\n\n")
-        if meta.get('homepage'):
-            parts.append(f"🌐 Homepage: {meta['homepage']}\n")
-        if meta.get('edam-operations'):
-            parts.append(f"⚙️  Operations: {', '.join(meta['edam-operations'])}\n")
-    else:
-        parts.append(f"\n{'='*70}\n🧬 {tool_name.upper()}\n{'='*70}\n\n")
-        parts.append("ℹ️  No metadata available for this tool\n")
+    meta = result['metadata']
+    containers = result['containers']
 
-    if result['containers']:
-        latest = result['containers'][0]
-        parts.append(f"\n{'─'*70}\n")
-        parts.append(f"📦 AVAILABLE CONTAINERS ({result['container_count']} versions)\n")
-        parts.append(f"{'─'*70}\n\n")
-        parts.append(f"✨ Most Recent Version: {latest['tag']}\n\n")
-        parts.append(f"   Path: {latest['path']}\n")
-        parts.append(f"   Size: {latest['size_bytes'] / (1024**2):.1f} MB\n\n")
-        parts.append(f"{'─'*70}\n💡 USAGE EXAMPLES\n{'─'*70}\n\n")
-        parts.append(f"# Execute a command in the container\n")
-        parts.append(f"singularity exec {latest['path']} \\\n  {tool_name} --help\n\n")
-        parts.append(f"# Run interactively\nsingularity shell {latest['path']}\n")
-        if len(result['containers']) > 1:
-            parts.append(f"\n{'─'*70}\n📚 OTHER VERSIONS\n{'─'*70}\n\n")
-            for i, container in enumerate(result['containers'][:3], 1):
-                parts.append(f"  {i:2}. {container['tag']}\n      {container['path']}\n")
-            if len(result['containers']) > 3:
-                parts.append(f"   ... and {len(result['containers']) - 3} more versions\n")
-    else:
-        parts.append(f"\n⚠️  WARNING: No containers found in CVMFS for this tool\n")
-        parts.append(f"   The tool may be available through other means or under a different name.\n")
+    tool_payload: Optional[Dict] = None
+    if meta:
+        tool_payload = {
+            "id": meta.get("id", clean_name),
+            "name": meta.get("name", clean_name),
+            "description": meta.get("description") or "",
+            "homepage": meta.get("homepage") or "",
+            "operations": index._flatten_edam(meta.get("edam-operations")),
+            "inputs": index._flatten_edam(meta.get("edam-inputs")),
+            "outputs": index._flatten_edam(meta.get("edam-outputs")),
+        }
 
-    parts.append(f"\n{'='*70}\n")
-    return "".join(parts)
+    containers_payload: Optional[Dict] = None
+    if containers:
+        seen: set = set()
+        unique_versions: List[str] = []
+        for c in containers:
+            short = c["tag"].split("--")[0]
+            if short not in seen:
+                seen.add(short)
+                unique_versions.append(short)
+
+        tool_id = tool_payload["id"] if tool_payload else clean_name
+        containers_payload = {
+            "available": True,
+            "recent_versions": unique_versions[:5],
+            "total_versions": len(unique_versions),
+            "install_command": f"shelley-bio build {tool_id}",
+        }
+
+    return json.dumps({
+        "query": clean_name,
+        "found": meta is not None or bool(containers),
+        "tool": tool_payload,
+        "containers": containers_payload,
+    })
 
 
 def _handle_search_by_function(description: str, limit: int) -> str:
