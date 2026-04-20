@@ -198,7 +198,7 @@ class BioFinderIndex:
         else:
             results.append(str(value))
 
-        return results
+        return list(set(results))  # Remove duplicates
 
     def _search_metadata(self, query: str) -> List[str]:
         """
