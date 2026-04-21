@@ -105,13 +105,13 @@ def _render_find_tool(payload: dict) -> None:
         if total > shown:
             table.add_row(
                 f"[muted]+ {total - shown} more[/muted]",
-                f"[muted]shelley-bio versions {tool_id}[/muted]",
+                f"[muted]shelley-bio versions {query}[/muted]",
             )
 
         console.print(table)
 
         console.print(Panel(
-            f"To install the latest version of {tool_id}, run:\n[command]{containers['install_command']}[/command]",
+            f"To install the latest version of {title_name}, run:\n\n[command]shelley-bio build {query}[/command]",
             title="[header]Install[/header]",
             box=ROUNDED,
             border_style="info",
