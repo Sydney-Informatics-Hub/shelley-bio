@@ -17,6 +17,7 @@ from rich.box import ROUNDED
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from shelley_bio.utils.globals import LMOD_MODULES_PATH
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..utils.style import (
@@ -79,7 +80,7 @@ def _render_find_tool(payload: dict) -> None:
     ))
 
     if containers and containers.get("available"):
-        lmod_path = Path("/apps/Modules/modulefiles")
+        lmod_path = Path(LMOD_MODULES_PATH)
         tool_id = tool.get("id", query) if tool else query
 
         table = Table(
@@ -93,7 +94,9 @@ def _render_find_tool(payload: dict) -> None:
         table.add_column("Status", no_wrap=True)
 
         for version in containers["recent_versions"]:
-            installed = (lmod_path / tool_id / f"{version}.lua").exists()
+            # Remove build suffix, match version only
+            version = re.sub(r"--.+$", "", version)
+            installed = any((lmod_path / tool_id).glob(f"{version}*.lua"))
             status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
             table.add_row(version, status)
 
