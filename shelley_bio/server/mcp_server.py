@@ -130,13 +130,11 @@ class BioFinderIndex:
                 tool_meta = entry
                 break
         
-        # Search for partial matches if exact match not found
+        # Fuzzy-match against all known IDs when no exact match was found
+        suggestions: List[str] = []
         if not tool_meta:
-            for entry in self.metadata:
-                entry_id = entry.get('id', '').lower()
-                if query_lower in entry_id or entry_id in query_lower:
-                    tool_meta = entry
-                    break
+            id_map = {e['id'].lower(): e['id'] for e in self.metadata if e.get('id')}
+            suggestions = [id_map[m] for m in get_close_matches(query_lower, id_map.keys(), n=8, cutoff=0.6)]
         
         # Get containers - try exact match first, then variations
         containers = []
@@ -169,7 +167,8 @@ class BioFinderIndex:
             'query': query,
             'metadata': tool_meta,
             'containers': containers_sorted,
-            'container_count': len(containers_sorted)
+            'container_count': len(containers_sorted),
+            'suggestions': suggestions if not tool_meta else [],
         }
 
     def _normalise(self, text: str) -> List[str]:
@@ -431,7 +430,8 @@ async def list_tools() -> list[Tool]:
 
 
 def _handle_find_tool(tool_name: str) -> str:
-    clean_name = re.sub(r'\b\d[\d.]*\b', '', tool_name).strip()
+    # Remove version suffixes
+    clean_name = re.sub(r'[:/].*$', '', tool_name).strip()
     result = index.search_tool(clean_name)
 
     meta = result['metadata']
@@ -470,6 +470,7 @@ def _handle_find_tool(tool_name: str) -> str:
     return json.dumps({
         "query": clean_name,
         "found": meta is not None or bool(containers),
+        "suggestions": result.get("suggestions", []),
         "tool": tool_payload,
         "containers": containers_payload,
     })

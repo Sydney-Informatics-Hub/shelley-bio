@@ -13,14 +13,15 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
+from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH
 
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
     def __init__(
         self,
-        cvmfs_singularity: str = "/cvmfs/singularity.galaxyproject.org/all", 
-        lmod_modules: str = "/apps/Modules/modulefiles"
+        cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH, 
+        lmod_modules: str = LMOD_MODULES_PATH
     ):
         self.cvmfs_singularity = cvmfs_singularity
         self.lmod_modules = lmod_modules

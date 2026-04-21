@@ -30,11 +30,26 @@ def _render_find_tool(payload: dict) -> None:
     query = payload.get("query", "unknown")
 
     if not payload.get("found"):
-        console.print(ShelleyStyle.create_error_panel(
-            "Tool Not Found",
-            f"No tool or container matching '{query}' was found.",
-            "Try: shelley-bio search <description>",
-        ))
+        suggestions = payload.get("suggestions", [])
+        if suggestions:
+            table = Table(
+                title=f"[warning]No exact match for '[tool]{query}[/tool]'. Did you mean:[/warning]",
+                box=ROUNDED,
+                border_style="warning",
+                header_style="table.header",
+                show_header=False,
+            )
+            table.add_column("Tool", style="tool", no_wrap=True)
+            table.add_column("Command", style="command", no_wrap=True)
+            for name in suggestions:
+                table.add_row(name, f"shelley-bio find {name}")
+            console.print(table)
+        else:
+            console.print(ShelleyStyle.create_error_panel(
+                "Tool Not Found",
+                f"No tool or container matching '{query}' was found.",
+                "Try: shelley-bio search <description>",
+            ))
         return
 
     tool = payload.get("tool")
@@ -93,7 +108,7 @@ def _render_find_tool(payload: dict) -> None:
         console.print(table)
 
         console.print(Panel(
-            f"[command]{containers['install_command']}[/command]",
+            f"To install the latest version of {tool_id}, run:\n[command]{containers['install_command']}[/command]",
             title="[header]Install[/header]",
             box=ROUNDED,
             border_style="info",
