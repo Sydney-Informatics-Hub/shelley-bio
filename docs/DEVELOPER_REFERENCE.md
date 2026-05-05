@@ -71,10 +71,27 @@ Once the editable package is installed, ensure to run commands using `bin/shelle
 
 ## Running tests
 
-To run all unit tests in `tests/`:
+The test suite is split into two groups:
+
+| Group | What it tests | Needs CVMFS? |
+|---|---|---|
+| General unit tests | Registry lookups, shpc install logic, CLI rendering | No |
+| CVMFS tests | Version resolution against real container files | Yes |
+
+### Automated CI (GitHub Actions)
+
+Every push to a pull request runs the general unit tests automatically. The CVMFS tests are **skipped** in CI because the CVMFS filesystem is not available in the GitHub Actions environment. You will see them marked as `s` (skipped) in the test output — this is expected.
+
+### Running the full test suite
+
+To run the complete test suite including the CVMFS tests, you need to be inside a BioShell environment where `/cvmfs/singularity.galaxyproject.org/all` is mounted.
+
+From within a BioShell session:
 
 ```bash
 cd shelley-bio
-pip install -e .
+pip install -e ".[dev]" # install tools required for testing
 pytest
 ```
+
+Tests marked `@pytest.mark.cvmfs` will run automatically when the CVMFS path is detected, and be skipped when it is not. No extra flags are needed. This decorator is defined in `conftest.py`.

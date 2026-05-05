@@ -49,6 +49,7 @@ def _make_subprocess_run(shpc_base: Path, install_rc: int = 0,
 # Existing version-resolution tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.cvmfs
 @pytest.mark.parametrize(
     "tool_name,tool_version",
     [('samtools', '1.21'), ('plink2', '2.00a5.12')]
@@ -72,16 +73,18 @@ def test_search_tool_version_multiplebuilds(builder, tool_name, tool_version):
         assert result[0] == tool_name
         assert result[1].split("--", 1)[0] == tool_version
 
+@pytest.mark.cvmfs
 @pytest.mark.parametrize(
-    "tool_name,tool_version", 
+    "tool_name,tool_version",
     [('samtools', '1.21--h96c455f_1'), ('plink2', '2.00a5.12--h4ac6f70_0')]
-) 
+)
 def test_search_tool_version_singlebuild(builder, tool_name, tool_version):
     # Both of these versions have only a single build
     exp = (tool_name, tool_version)
     get = builder.search_tool_version(tool_name, tool_version)
     assert get == exp
 
+@pytest.mark.cvmfs
 @pytest.mark.parametrize(
     "tool_name,tool_version,latest_version",
     [('samtools', None, '1.23.1--ha83d96e_0'), ('plink2', None, '2.00a5.12--h4ac6f70_0')]
