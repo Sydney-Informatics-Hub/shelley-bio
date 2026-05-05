@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from shelley_bio.utils.constants import STOP_WORDS
 from shelley_bio.utils.style import console, ShelleyStyle, print_error
+from shelley_bio.builder.cvmfs_builder import get_registry_tags
 
 # MCP SDK imports
 # The MCP server exposes "tools" (callable functions) and "resources" (readable
@@ -452,14 +453,16 @@ def _handle_find_tool(tool_name: str) -> str:
     containers_payload: Optional[Dict] = None
     if containers:
         seen: set = set()
-        unique_versions: List[str] = []
+        unique_versions: List[Dict] = []
+        tool_id = tool_payload["id"] if tool_payload else clean_name
+        registry_tags = get_registry_tags(tool_id)
         for c in containers:
             short = c["tag"].split("--")[0]
             if short not in seen:
                 seen.add(short)
-                unique_versions.append(short)
+                buildable = c["tag"] in registry_tags
+                unique_versions.append({"version": short, "buildable": buildable})
 
-        tool_id = tool_payload["id"] if tool_payload else clean_name
         containers_payload = {
             "available": True,
             "recent_versions": unique_versions[:5],

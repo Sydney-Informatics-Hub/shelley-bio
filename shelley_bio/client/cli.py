@@ -79,6 +79,8 @@ def _render_find_tool(payload: dict) -> None:
         padding=(1, 2),
     ))
 
+    lines.append('\n')
+
     if containers and containers.get("available"):
         lmod_path = Path(LMOD_MODULES_PATH)
         tool_id = tool.get("id", query) if tool else query
@@ -91,20 +93,23 @@ def _render_find_tool(payload: dict) -> None:
             show_lines=False,
         )
         table.add_column("Version", style="version", no_wrap=True)
+        table.add_column("Buildable", no_wrap=True)
         table.add_column("Status", no_wrap=True)
 
-        for version in containers["recent_versions"]:
-            # Remove build suffix, match version only
-            version = re.sub(r"--.+$", "", version)
+        for entry in containers["recent_versions"]:
+            version = entry["version"]
+            buildable = entry["buildable"]
             installed = any((lmod_path / tool_id).glob(f"{version}*.lua"))
+            buildable_str = "[success]✓[/success]" if buildable else "[muted]✗[/muted]"
             status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
-            table.add_row(version, status)
+            table.add_row(version, buildable_str, status)
 
         total = containers["total_versions"]
         shown = len(containers["recent_versions"])
         if total > shown:
             table.add_row(
                 f"[muted]+ {total - shown} more[/muted]",
+                "",
                 f"[muted]shelley-bio versions {query}[/muted]",
             )
 
