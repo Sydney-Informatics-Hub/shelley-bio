@@ -186,6 +186,7 @@ def mock_builder_cls(tmp_path):
     fake_builder.list_versions.return_value = [v for _, v in FAKE_VERSIONS]
 
     with patch("shelley_bio.client.cli.CVMFSModuleBuilder", return_value=fake_builder), \
+         patch("pathlib.Path.exists", return_value=True), \
          patch("os.access", return_value=True), \
          patch("shelley_bio.client.cli.ShelleyStyle.create_status") as mock_status, \
          patch("shelley_bio.client.cli.console"):
