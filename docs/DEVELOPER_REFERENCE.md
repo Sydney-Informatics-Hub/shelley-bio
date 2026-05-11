@@ -71,16 +71,17 @@ Once the editable package is installed, ensure to run commands using `bin/shelle
 
 ## Running tests
 
-The test suite is split into two groups:
+The test suite is split into three groups:
 
-| Group | What it tests | Needs CVMFS? |
-|---|---|---|
-| General unit tests | Registry lookups, shpc install logic, CLI rendering | No |
-| CVMFS tests | Version resolution against real container files | Yes |
+| Group | What it tests | Mark | Runs in CI? |
+|---|---|---|---|
+| General unit tests | Registry lookups, shpc install logic, CLI rendering | *(none)* | Yes |
+| CVMFS tests | Version resolution against real container files | `cvmfs` | No (skipped) |
+| Network tests | `find` buildable cross-check against GitHub shpc-registry | `network` | Yes (requires outbound curl) |
 
 ### Automated CI (GitHub Actions)
 
-Every push to a pull request runs the general unit tests automatically. The CVMFS tests are **skipped** in CI because the CVMFS filesystem is not available in the GitHub Actions environment. You will see them marked as `s` (skipped) in the test output — this is expected.
+Every push to a pull request runs the general unit tests and network tests automatically. The CVMFS tests are **skipped** in CI because the CVMFS filesystem is not available in the GitHub Actions environment. You will see them marked as `s` (skipped) in the test output — this is expected.
 
 ### Running the full test suite
 
@@ -94,4 +95,21 @@ pip install -e ".[dev]" # install tools required for testing
 pytest
 ```
 
-Tests marked `@pytest.mark.cvmfs` will run automatically when the CVMFS path is detected, and be skipped when it is not. No extra flags are needed. This decorator is defined in `conftest.py`.
+To run only the offline tests (no CVMFS, no network):
+
+```bash
+pytest -m "not cvmfs and not network"
+```
+
+Tests marked `@pytest.mark.cvmfs` will run automatically when the CVMFS path is detected, and be skipped when it is not. Tests marked `@pytest.mark.network` always run unless explicitly excluded — they make outbound curl requests to the [shpc-registry](https://github.com/singularityhub/shpc-registry) on GitHub. Both markers are defined in `conftest.py`.
+
+### `find` buildable tests (`tests/test_find_buildable.py`)
+
+Exercises `_handle_find_tool()` with 21 real-world tool arguments covering all supported input formats (`tool:version--hash`, `tool/version`, bare name, R/Bioconductor packages). Four categories:
+
+- **Smoke** — all 21 inputs return valid JSON (offline, always runs)
+- **Buildable cross-check** (`network`) — for full-tag inputs (e.g. `fastqc:0.12.1--hdfd78af_0`), asserts that the `buildable` field in `find` output matches `full_tag in get_registry_tags()` called independently
+- **Version presence** — version-only inputs (e.g. `samtools/1.19`) resolve to a known container in the local index (offline)
+- **R packages** — confirms R/Bioconductor tools return no Singularity containers (offline)
+
+Cross-check tests skip automatically when the requested version is not in the top-5 most recent results (expected for older tags like `blast:2.5.0`).

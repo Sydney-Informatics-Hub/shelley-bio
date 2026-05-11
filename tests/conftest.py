@@ -8,6 +8,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "cvmfs: requires a live CVMFS mount"
     )
+    config.addinivalue_line(
+        "markers", "network: requires outbound network access (curl to GitHub shpc-registry)"
+    )
 
 
 @pytest.fixture(autouse=True)
