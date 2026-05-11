@@ -115,6 +115,13 @@ def _render_find_tool(payload: dict) -> None:
 
         console.print(table)
 
+        if any(not e["buildable"] for e in containers["recent_versions"]):
+            console.print(
+                "[muted]Buildable ✗: Versions not in the shpc registry may still be built, "
+                "but can take a few minutes longer. This is suited for users who need "
+                "a specific older version for reproducibility.[/muted]"
+            )
+
         console.print(Panel(
             f"To install the latest version of {title_name}, run:\n\n[command]shelley-bio build {query}[/command]",
             title="[header]Install[/header]",
