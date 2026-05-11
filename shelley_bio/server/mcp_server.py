@@ -454,14 +454,15 @@ def _handle_find_tool(tool_name: str) -> str:
     if containers:
         seen: set = set()
         unique_versions: List[Dict] = []
-        tool_id = tool_payload["id"] if tool_payload else clean_name
+        tool_id = clean_name
         registry_tags = get_registry_tags(tool_id)
+        # A version is buildable if any of its build hashes appear in the registry.
+        buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
         for c in containers:
             short = c["tag"].split("--")[0]
             if short not in seen:
                 seen.add(short)
-                buildable = c["tag"] in registry_tags
-                unique_versions.append({"version": short, "buildable": buildable})
+                unique_versions.append({"version": short, "buildable": short in buildable_shorts})
 
         containers_payload = {
             "available": True,

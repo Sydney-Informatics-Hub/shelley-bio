@@ -75,26 +75,29 @@ def test_find_with_versioned_arg_returns_valid_json(arg):
 
 # ---------------------------------------------------------------------------
 # Category 2 — Buildable cross-check: full-tag inputs (network required)
+#
+# For a given full tag, the version is buildable iff the registry contains
+# *any* build hash for that short version (buildable_shorts semantics).
 # ---------------------------------------------------------------------------
 
 FULL_TAG_CASES = [
-    ("fastqc:0.12.1--hdfd78af_0",  "fastqc",  "0.12.1--hdfd78af_0"),
-    ("multiqc:1.19--pyhdfd78af_0", "multiqc", "1.19--pyhdfd78af_0"),
-    ("salmon:1.10.1--h7e5ed60_0",  "salmon",  "1.10.1--h7e5ed60_0"),
-    ("blast:2.5.0--hc0b0e79_3",    "blast",   "2.5.0--hc0b0e79_3"),
-    ("star/2.7.11a--h0033a41_0",   "star",    "2.7.11a--h0033a41_0"),
+    ("fastqc:0.12.1--hdfd78af_0",  "fastqc",  "0.12.1"),
+    ("multiqc:1.19--pyhdfd78af_0", "multiqc", "1.19"),
+    ("salmon:1.10.1--h7e5ed60_0",  "salmon",  "1.10.1"),
+    ("blast:2.5.0--hc0b0e79_3",    "blast",   "2.5.0"),
+    ("star/2.7.11a--h0033a41_0",   "star",    "2.7.11a"),
 ]
 
 
 @pytest.mark.network
-@pytest.mark.parametrize("arg,tool_id,full_tag", FULL_TAG_CASES)
-def test_find_buildable_matches_registry(arg, tool_id, full_tag):
-    """buildable in find output must equal (full_tag in get_registry_tags())."""
+@pytest.mark.parametrize("arg,tool_id,short_version", FULL_TAG_CASES)
+def test_find_buildable_matches_registry(arg, tool_id, short_version):
+    """buildable in find output must equal (short_version in registry buildable_shorts)."""
     registry_tags = get_registry_tags(tool_id)
-    expected_buildable = full_tag in registry_tags
+    buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+    expected_buildable = short_version in buildable_shorts
 
     payload = json.loads(_handle_find_tool(arg))
-    short_version = full_tag.split("--")[0]
     versions = (payload.get("containers") or {}).get("recent_versions", [])
     match = next((v for v in versions if v["version"] == short_version), None)
 
@@ -102,10 +105,47 @@ def test_find_buildable_matches_registry(arg, tool_id, full_tag):
         pytest.skip(f"{short_version} not in top-5 recent versions for {tool_id}")
 
     assert match["buildable"] == expected_buildable, (
-        f"{tool_id} {full_tag}: find says buildable={match['buildable']}, "
+        f"{tool_id} {short_version}: find says buildable={match['buildable']}, "
         f"registry says {expected_buildable} "
-        f"(registry_tags sample: {sorted(registry_tags)[:3]})"
+        f"(buildable_shorts sample: {sorted(buildable_shorts)[:3]})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Category 2b — All output versions have correct buildable status (network required)
+#
+# The test above (Category 2) only checks one user-specified version per tool.
+# This test validates every version the user actually sees in the output using
+# the same buildable_shorts semantics as _handle_find_tool.
+#
+# Regression tools:
+#   star-fusion  — metadata id used underscore (star_fusion), breaking registry lookup
+#   samblaster   — first container per short version not in registry; other build
+#                  hashes for the same version are, so short-version matching is needed
+# ---------------------------------------------------------------------------
+
+@pytest.mark.network
+@pytest.mark.parametrize("tool_id", [
+    "fastqc", "multiqc", "salmon", "bcftools",
+    "bwa-mem2", "fastp", "sambamba", "samblaster", "samtools",
+    "blast", "star", "star-fusion",
+])
+def test_all_output_versions_buildable_matches_registry(index, tool_id):
+    """Every version shown to the user must have the correct buildable status."""
+    registry_tags = get_registry_tags(tool_id)
+    buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+
+    payload = json.loads(_handle_find_tool(tool_id))
+    versions = (payload.get("containers") or {}).get("recent_versions", [])
+    assert versions, f"No recent_versions in find output for {tool_id}"
+
+    for v in versions:
+        expected = v["version"] in buildable_shorts
+        assert v["buildable"] == expected, (
+            f"{tool_id} {v['version']}: output buildable={v['buildable']}, "
+            f"registry says {expected} "
+            f"(buildable_shorts sample: {sorted(buildable_shorts)[:3]})"
+        )
 
 
 # ---------------------------------------------------------------------------
