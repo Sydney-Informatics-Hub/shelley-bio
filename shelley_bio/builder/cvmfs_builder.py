@@ -14,6 +14,8 @@ import re
 import questionary
 from datetime import datetime
 
+from shelley_bio.builder.guts_integration import extract_aliases
+
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
@@ -159,11 +161,12 @@ class CVMFSModuleBuilder:
         )
 
         if fetch.returncode != 0 or not registry_yaml.exists():
-            # Tool not in upstream registry — create a minimal config
-            config: dict = {"docker": uri, "tags": {}, "filter": [version], "aliases": []}
+            config: dict = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
         else:
             with open(registry_yaml) as f:
                 config = yaml.safe_load(f) or {}
+            if not config.get("aliases"):
+                config["aliases"] = extract_aliases(container_path)
 
         # Append the missing tag
         if version not in config.get("tags", {}):

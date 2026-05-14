@@ -213,3 +213,63 @@ def test_build_full_tag(mock_builder_cls):
 
     assert result is True
     mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.21--h96c455f_1")
+
+
+# ---------------------------------------------------------------------------
+# _ensure_local_registry_entry alias generation
+# ---------------------------------------------------------------------------
+
+def test_ensure_local_registry_populates_aliases_on_miss(builder, tmp_path):
+    """When upstream registry returns 404, aliases are populated via guts diff."""
+    fake_aliases = [{"name": "bwa", "command": "bwa"}]
+    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run") as mock_run, \
+         patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
+         patch.object(builder, "_compute_sha256", return_value="abc123"):
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
+        builder._ensure_local_registry_entry(
+            "bwa", "0.7.17--hed695b0_7",
+            "/cvmfs/.../bwa:0.7.17--hed695b0_7",
+            "quay.io/biocontainers/bwa",
+            local_registry=str(tmp_path),
+        )
+    import yaml
+    config = yaml.safe_load(
+        (tmp_path / "quay.io/biocontainers/bwa/container.yaml").read_text()
+    )
+    assert config["aliases"] == fake_aliases
+
+
+def test_ensure_local_registry_fills_empty_upstream_aliases(builder, tmp_path):
+    """When upstream container.yaml has empty aliases, guts diff fills them in."""
+    fake_aliases = [{"name": "samtools", "command": "samtools"}]
+    registry_dir = tmp_path / "quay.io/biocontainers/samtools"
+    registry_dir.mkdir(parents=True)
+    (registry_dir / "container.yaml").write_text(
+        "docker: quay.io/biocontainers/samtools\naliases: []\ntags: {}\n"
+    )
+    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run") as mock_run, \
+         patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
+         patch.object(builder, "_compute_sha256", return_value="abc123"):
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        builder._ensure_local_registry_entry(
+            "samtools", "1.21--h96c455f_1",
+            "/cvmfs/.../samtools:1.21--h96c455f_1",
+            "quay.io/biocontainers/samtools",
+            local_registry=str(tmp_path),
+        )
+    import yaml
+    config = yaml.safe_load((registry_dir / "container.yaml").read_text())
+    assert config["aliases"] == fake_aliases
+
+
+def test_extract_aliases_returns_empty_on_import_error():
+    """extract_aliases degrades gracefully when container-guts is not installed."""
+    from shelley_bio.builder.guts_integration import extract_aliases
+    with patch.dict("sys.modules", {
+        "container_guts": None,
+        "container_guts.main": None,
+        "container_guts.main.client": None,
+        "container_guts.defaults": None,
+    }):
+        result = extract_aliases("/cvmfs/foo/bar:1.0")
+    assert result == []
