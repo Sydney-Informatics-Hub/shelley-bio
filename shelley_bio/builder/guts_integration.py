@@ -1,8 +1,19 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 from container_guts.main import ManifestGenerator
+
+_SUPPLEMENTARY_DB = Path(__file__).parent.parent / "data" / "guts_db"
+
+
+def _merge_supplementary_db(tmpdir: str) -> None:
+    """Copy bundled extra manifests (e.g. miniconda3) into the guts tmpdir."""
+    if _SUPPLEMENTARY_DB.exists():
+        shutil.copytree(str(_SUPPLEMENTARY_DB), tmpdir, dirs_exist_ok=True)
+
 
 def _sparse_clone_base_manifests(db_url: str, namespaces: list[str]) -> str:
     """
@@ -46,19 +57,21 @@ def extract_aliases(cvmfs_path: str) -> list[dict]:
     tmpdir = None
     try:
         tmpdir = _sparse_clone_base_manifests(SHPC_GUTS_DB_URL, BASE_IMAGE_NAMESPACES)
-        # Use the Sydney-Informatics-Hub/guts implementation for singularity support 
+        _merge_supplementary_db(tmpdir)
+        # Use the Sydney-Informatics-Hub/guts implementation for singularity support
         gen = ManifestGenerator(tech="singularity")
         result = gen.diff(cvmfs_path, database=tmpdir)
         if not result:
             return []
         diff_data = next(iter(result.values()), {}).get("diff", {})
         unique_paths = sorted(diff_data.get("unique_paths", []))
+        bin_re = re.compile(r"/(s?bin)/")
         return [
             {"name": os.path.basename(p), "command": os.path.basename(p)}
             for p in unique_paths
-            if os.path.basename(p)
+            if bin_re.search(p) and os.path.basename(p)
         ]
-    except Exception:
+    except (Exception, SystemExit):
         return []
     finally:
         if tmpdir:

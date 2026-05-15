@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """pytest coverage for CVMFSModuleBuilder: version resolution and shpc-based installation."""
 
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -262,14 +263,88 @@ def test_ensure_local_registry_fills_empty_upstream_aliases(builder, tmp_path):
     assert config["aliases"] == fake_aliases
 
 
-def test_extract_aliases_returns_empty_on_import_error():
-    """extract_aliases degrades gracefully when container-guts is not installed."""
+def test_extract_aliases_returns_empty_on_failure():
+    """extract_aliases degrades gracefully when the sparse clone or diff fails."""
     from shelley_bio.builder.guts_integration import extract_aliases
-    with patch.dict("sys.modules", {
-        "container_guts": None,
-        "container_guts.main": None,
-        "container_guts.main.client": None,
-        "container_guts.defaults": None,
-    }):
+    with patch("shelley_bio.builder.guts_integration._sparse_clone_base_manifests",
+               side_effect=subprocess.CalledProcessError(1, "git")):
         result = extract_aliases("/cvmfs/foo/bar:1.0")
     assert result == []
+
+
+def test_shpc_install_in_registry_skips_local_entry(builder, tmp_path):
+    """Happy path: tool already in registry — _ensure_local_registry_entry is never called."""
+    tool, version = "samtools", "1.21--h96c455f_1"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
+        dest = builder.shpc_install(tool, version)
+
+    mock_ensure.assert_not_called()
+    assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
+    assert dest.is_symlink()
+    assert dest.resolve() == src.resolve()
+
+
+def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
+    """Full chain: shpc miss → _ensure_local_registry_entry runs → extract_aliases called
+    → YAML written with aliases → retry succeeds → symlink created."""
+    tool, version = "bwa", "0.7.17--hed695b0_7"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    local_registry = tmp_path / "registry"
+    install_calls = {"n": 0}
+
+    def fake_run(cmd, **_):
+        m = MagicMock()
+        m.stderr = ""
+        if "module_base" in cmd:
+            m.returncode = 0
+            m.stdout = str(shpc_base)
+        elif "curl" in cmd:
+            m.returncode = 1
+            m.stdout = ""
+        else:
+            install_calls["n"] += 1
+            if install_calls["n"] == 1:
+                m.returncode = 1
+                m.stdout = f"{tool}:{version} is not a known identifier."
+            else:
+                m.returncode = 0
+                m.stdout = "Module was created.\n"
+        return m
+
+    fake_aliases = [{"name": "bwa", "command": "bwa"}]
+
+    # Wrap _ensure_local_registry_entry to redirect writes to tmp_path
+    real_ensure = builder._ensure_local_registry_entry
+    def wrapped_ensure(tool_name, ver, container_path, uri, **_):
+        real_ensure(tool_name, ver, container_path, uri, local_registry=str(local_registry))
+
+    expected_cvmfs = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch.object(builder, "_ensure_local_registry_entry", side_effect=wrapped_ensure), \
+         patch("shelley_bio.builder.cvmfs_builder.extract_aliases",
+               return_value=fake_aliases) as mock_extract, \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        dest = builder.shpc_install(tool, version)
+
+    mock_extract.assert_called_once_with(expected_cvmfs)
+
+    import yaml
+    config = yaml.safe_load(
+        (local_registry / "quay.io" / "biocontainers" / tool / "container.yaml").read_text()
+    )
+    assert config["aliases"] == fake_aliases
+    assert install_calls["n"] == 2
+    assert dest.is_symlink()
+    assert dest.resolve() == src.resolve()
