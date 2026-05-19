@@ -14,6 +14,7 @@ import re
 import questionary
 from datetime import datetime
 from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH
+from shelley_bio.builder.guts_integration import extract_aliases
 
 def _load_registry_config(uri: str, local_yaml: Path) -> dict:
     """Return the shpc registry config dict for uri.
@@ -207,7 +208,9 @@ class CVMFSModuleBuilder:
         
         config = _load_registry_config(uri, registry_yaml)
         if not config:
-            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": []}
+            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
+        elif not config.get("aliases"):
+            config["aliases"] = extract_aliases(container_path)
 
         if version not in config.get("tags", {}):
             sha256 = self._compute_sha256(container_path)
