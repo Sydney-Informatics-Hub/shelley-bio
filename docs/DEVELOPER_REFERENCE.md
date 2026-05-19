@@ -104,18 +104,54 @@ by default) and loaded automatically — no code changes required for new base i
 **When to refresh:** when a base image's conda version makes a major jump (e.g.
 Python 3.10 → 3.12) and tool manifests suddenly gain or lose many entries.
 The current manifest covers `anaconda/miniconda:latest` as of 2026-05.
->>>>>>> issue-9
 
 ## Developer setup
 
-When developing, you may need to rebuild the `shelley-bio` to capture the changes made:
+### First-time environment setup
+
+The project uses [uv](https://github.com/astral-sh/uv) for dependency management and requires the local `guts` library (singularity branch) to be checked out as a sibling directory.
+
+Install `uv` if not already present:
 
 ```bash
-# Install dev version in editable mode
-pip install -e .
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Once the editable package is installed, ensure to run commands using `bin/shelley-bio`.
+```bash
+# 1. Clone both repos side by side
+git clone <shelley-bio-url> shelley-bio
+git clone https://github.com/Sydney-Informatics-Hub/guts.git
+
+# Change to the SIH dev branch that supports singularity
+cd guts && git checkout singularity && cd ..
+
+# 2. Create and activate the virtual environment
+cd shelley-bio
+uv venv .venv
+source .venv/bin/activate
+
+# 3. Install shelley-bio in editable mode with dev extras
+#    uv resolves the local ../guts path from pyproject.toml automatically
+uv pip install -e ".[dev]"
+
+# 4. Verify
+shelley-bio
+pytest --collect-only # check pytest is installed correctly, but do not run
+```
+
+> **Why `uv` and not plain `pip`?** `pyproject.toml` declares `container-guts` as a local path
+> dependency (`[tool.uv.sources]`). Plain `pip install -e .` ignores this table and will
+> try to pull `container-guts` from PyPI instead.
+
+### Keeping the environment up to date
+
+After pulling changes that modify `pyproject.toml` or `guts/`:
+
+```bash
+uv pip install -e ".[dev]"   # re-sync dependencies
+```
+
+No need to recreate the venv unless Python itself changes.
 
 ## Running tests
 
@@ -131,22 +167,21 @@ The test suite is split into three groups:
 
 Every push to a pull request runs the general unit tests and network tests automatically. The CVMFS tests are **skipped** in CI because the CVMFS filesystem is not available in the GitHub Actions environment. You will see them marked as `s` (skipped) in the test output — this is expected.
 
-### Running the full test suite
+### Running tests locally (BioShell)
 
-To run the complete test suite including the CVMFS tests, you need to be inside a BioShell environment where `/cvmfs/singularity.galaxyproject.org/all` is mounted.
-
-From within a BioShell session:
+Run the full suite from inside a BioShell session where `/cvmfs/singularity.galaxyproject.org/all` is mounted — `cvmfs`-marked tests auto-enable when the path exists:
 
 ```bash
-cd shelley-bio
-pip install -e ".[dev]" # install tools required for testing
-pytest
+source .venv/bin/activate
+pytest                              # all tests
+pytest -v --tb=short                # verbose with short tracebacks
+pytest tests/test_cvmfs_builder.py  # single file
 ```
 
-To run only the offline tests (no CVMFS, no network):
+To exclude network tests when offline:
 
 ```bash
-pytest -m "not cvmfs and not network"
+pytest -m "not network"
 ```
 
 Tests marked `@pytest.mark.cvmfs` will run automatically when the CVMFS path is detected, and be skipped when it is not. Tests marked `@pytest.mark.network` always run unless explicitly excluded — they make outbound curl requests to the [shpc-registry](https://github.com/singularityhub/shpc-registry) on GitHub. Both markers are defined in `conftest.py`.
