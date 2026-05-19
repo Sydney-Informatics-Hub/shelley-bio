@@ -96,6 +96,14 @@ def test_search_tool_version_none(builder, tool_name, tool_version, latest_versi
     get = builder.search_tool_version(tool_name, tool_version)
     assert get == exp
 
+@pytest.mark.cvmfs
+@pytest.mark.parametrize(
+    "tool_name,tool_version",
+    [('samtools', '1.23.1'), ('plink2', '2.00a5.12')]
+)
+def test_run_shpc_install_cvmfs_basic(builder, tool_name, tool_version):
+    exitcode, _ = builder._run_shpc_install(tool_name, tool_version)
+    assert not exitcode
 
 # ---------------------------------------------------------------------------
 # shpc_install unit tests
@@ -316,6 +324,9 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
         elif "curl" in cmd:
             m.returncode = 1
             m.stdout = ""
+        elif "config" in cmd:
+            m.returncode = 0
+            m.stdout = ""  # registry not listed → add will be called; both are no-ops here
         else:
             install_calls["n"] += 1
             if install_calls["n"] == 1:

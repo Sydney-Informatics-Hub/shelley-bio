@@ -6,6 +6,7 @@ Builds Lmod module files for tools available in CVMFS.
 """
 
 import hashlib
+import logging
 import subprocess
 import yaml
 from pathlib import Path
@@ -15,6 +16,8 @@ import questionary
 from datetime import datetime
 from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH
 from shelley_bio.builder.guts_integration import extract_aliases
+
+log = logging.getLogger(__name__)
 
 def _load_registry_config(uri: str, local_yaml: Path) -> dict:
     """Return the shpc registry config dict for uri.
@@ -176,11 +179,30 @@ class CVMFSModuleBuilder:
 
         Returns (returncode, combined stdout+stderr).
         """
+        msg = f"Running shpc install {uri_tag} {container_path} --keep-path"
+        log.info(msg)
+        
         result = subprocess.run(
             ["shpc", "install", uri_tag, container_path, "--keep-path"],
             capture_output=True, text=True,
         )
         return result.returncode, result.stdout + result.stderr
+
+    def _register_local_registry(self, local_registry: str) -> None:
+        """Ensure local_registry is in shpc's registry search path (best-effort)."""
+        try:
+            result = subprocess.run(
+                ["shpc", "config", "get", "registry"],
+                capture_output=True, text=True,
+            )
+            if local_registry not in result.stdout:
+                subprocess.run(
+                    ["shpc", "config", "add", "registry", local_registry],
+                    capture_output=True, text=True, check=True,
+                )
+                log.info("Registered local registry with shpc: %s", local_registry)
+        except Exception as e:
+            log.warning("Could not register local registry with shpc: %s", e)
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
@@ -208,9 +230,15 @@ class CVMFSModuleBuilder:
         
         config = _load_registry_config(uri, registry_yaml)
         if not config:
-            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
+            aliases = extract_aliases(container_path)
+            if not aliases:
+                log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": aliases}
         elif not config.get("aliases"):
-            config["aliases"] = extract_aliases(container_path)
+            aliases = extract_aliases(container_path)
+            if not aliases:
+                log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+            config["aliases"] = aliases
 
         if version not in config.get("tags", {}):
             sha256 = self._compute_sha256(container_path)
@@ -218,6 +246,8 @@ class CVMFSModuleBuilder:
             registry_yaml.parent.mkdir(parents=True, exist_ok=True)
             with open(registry_yaml, "w") as f:
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        self._register_local_registry(local_registry)
 
     def shpc_install(self, tool_name: str, version: str) -> Path:
         """
