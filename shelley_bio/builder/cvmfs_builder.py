@@ -61,6 +61,8 @@ def get_registry_tags(tool_name: str, local_registry: str = "/apps/local") -> se
     return set(config.get("tags", {}).keys())
 
 
+from shelley_bio.builder.guts_integration import extract_aliases
+
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
@@ -198,6 +200,15 @@ class CVMFSModuleBuilder:
         if not config:
             config = {"docker": uri, "tags": {}, "filter": [version], "aliases": []}
 
+        if fetch.returncode != 0 or not registry_yaml.exists():
+            config: dict = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
+        else:
+            with open(registry_yaml) as f:
+                config = yaml.safe_load(f) or {}
+            if not config.get("aliases"):
+                config["aliases"] = extract_aliases(container_path)
+
+        # Append the missing tag
         if version not in config.get("tags", {}):
             sha256 = self._compute_sha256(container_path)
             config.setdefault("tags", {})[version] = f"sha256:{sha256}"

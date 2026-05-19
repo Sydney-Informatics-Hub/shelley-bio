@@ -36,7 +36,7 @@ from mcp.types import (Resource, Tool, TextContent)
 import mcp.server.stdio
 
 # Data paths
-DATA_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 METADATA_FILE = DATA_DIR / "toolfinder_meta.yaml"
 SINGULARITY_CACHE_FILE = DATA_DIR / "galaxy_singularity_cache.json.gz"
 
