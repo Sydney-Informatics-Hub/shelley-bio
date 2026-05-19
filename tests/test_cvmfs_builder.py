@@ -101,10 +101,20 @@ def test_search_tool_version_none(builder, tool_name, tool_version, latest_versi
     "tool_name,tool_version",
     [('samtools', '1.23.1'), ('plink2', '2.00a5.12')]
 )
-def test_run_shpc_install_cvmfs_basic(builder, tool_name, tool_version):
+def test_run_shpc_install_missing_cvmfs_path(builder, tool_name, tool_version):
     exitcode, _ = builder._run_shpc_install(tool_name, tool_version)
-    assert not exitcode
+    assert exitcode == 1
 
+@pytest.mark.cvmfs
+@pytest.mark.parametrize(
+    "tool_build",['plink:1.90b7.7--h18e278d_1', 'samtools:1.23.1--ha83d96e_0']
+)
+def test_run_shpc_install_cvmfs_works(builder, tool_build):
+    arg1 = f"quay.io/biocontainers/{tool_build}"
+    arg2 = f"/cvmfs/singularity.galaxyproject.org/all{tool_build}"
+    exitcode, _ = builder._run_shpc_install(arg1, arg2)
+    assert not exitcode, f"shpc install should work, possibly a registry path issue"
+    
 # ---------------------------------------------------------------------------
 # shpc_install unit tests
 # ---------------------------------------------------------------------------
@@ -142,6 +152,9 @@ def test_shpc_install_registry_miss_retries(builder, tmp_path):
         if "module_base" in cmd:
             m.returncode = 0
             m.stdout = str(shpc_base)
+        elif "config" in cmd:
+            m.returncode = 0
+            m.stdout = ""
         else:
             install_calls["n"] += 1
             if install_calls["n"] == 1:

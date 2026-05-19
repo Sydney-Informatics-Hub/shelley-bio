@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
-from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH
+from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY
 from shelley_bio.builder.guts_integration import extract_aliases
 
 log = logging.getLogger(__name__)
@@ -177,7 +177,14 @@ class CVMFSModuleBuilder:
         """
         Run: shpc install <uri_tag> <container_path> --keep-path
 
-        Returns (returncode, combined stdout+stderr).
+        Example:
+            shpc install \
+                quay.io/biocontainers/plink:1.90b7.7--h18e278d_1 \
+                /cvmfs/singularity.galaxyproject.org/all/plink:1.90b7.7--h18e278d_1 \
+                --keep-path
+
+        Returns:
+            (returncode, combined stdout+stderr)
         """
         msg = f"Running shpc install {uri_tag} {container_path} --keep-path"
         log.info(msg)
@@ -206,7 +213,7 @@ class CVMFSModuleBuilder:
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
-        local_registry: str = "/apps/local",
+        local_registry: str = LOCAL_REGISTRY,
     ) -> None:
         """
         Create or update a local shpc registry entry for a CVMFS-only tag.
@@ -247,8 +254,6 @@ class CVMFSModuleBuilder:
             with open(registry_yaml, "w") as f:
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-        self._register_local_registry(local_registry)
-
     def shpc_install(self, tool_name: str, version: str) -> Path:
         """
         Install a CVMFS container as a functional Lmod module using shpc.
@@ -277,7 +282,9 @@ class CVMFSModuleBuilder:
 
         if returncode != 0:
             if self._is_registry_miss(output):
-                self._ensure_local_registry_entry(tool_name, version, container_path, uri)
+                self._ensure_local_registry_entry(tool_name, version, container_path, uri,
+                                                  local_registry=LOCAL_REGISTRY)
+                self._register_local_registry(LOCAL_REGISTRY)
                 returncode, output = self._run_shpc_install(uri_tag, container_path)
 
             if returncode != 0:
