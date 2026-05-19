@@ -11,24 +11,143 @@ import json
 import re
 from pathlib import Path
 
+from rich.panel import Panel
+from rich.table import Table
+from rich.box import ROUNDED
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from shelley_bio.utils.globals import LMOD_MODULES_PATH
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..utils.style import (
-    console, ShelleyStyle, print_banner, print_header, print_success, 
+    console, ShelleyStyle, print_banner, print_header, print_success,
     print_warning, print_error, print_info, print_rule, print_command
 )
+
+
+def _render_find_tool(payload: dict) -> None:
+    """Render find_tool JSON payload using Rich components."""
+    query = payload.get("query", "unknown")
+
+    if not payload.get("found"):
+        suggestions = payload.get("suggestions", [])
+        if suggestions:
+            table = Table(
+                title=f"[warning]No exact match for '[tool]{query}[/tool]'. Did you mean:[/warning]",
+                box=ROUNDED,
+                border_style="warning",
+                header_style="table.header",
+                show_header=False,
+            )
+            table.add_column("Tool", style="tool", no_wrap=True)
+            table.add_column("Command", style="command", no_wrap=True)
+            for name in suggestions:
+                table.add_row(name, f"shelley-bio find {name}")
+            console.print(table)
+        else:
+            console.print(ShelleyStyle.create_error_panel(
+                "Tool Not Found",
+                f"No tool or container matching '{query}' was found.",
+                "Try: shelley-bio search <description>",
+            ))
+        return
+
+    tool = payload.get("tool")
+    containers = payload.get("containers")
+
+    # Tool info panel
+    lines = []
+    if tool:
+        if tool.get("description"):
+            lines.append(f"[header]Description[/header]\n[muted]{tool['description']}[/muted]\n")
+        if tool.get("homepage"):
+            lines.append(f"[header]Homepage[/header]    [info]{tool['homepage']}[/info]\n")
+        if tool.get("operations"):
+            lines.append(f"[header]Operations[/header]  [muted]{', '.join(tool['operations'])}[/muted]\n")
+        if tool.get("inputs"):
+            lines.append(f"[header]Inputs[/header]      [muted]{', '.join(tool['inputs'])}[/muted]\n")
+        if tool.get("outputs"):
+            lines.append(f"[header]Outputs[/header]     [muted]{', '.join(tool['outputs'])}[/muted]\n")
+
+    title_name = tool.get("name") if tool else query
+    console.print(Panel(
+        "\n".join(lines) if lines else "[muted]No metadata available for this tool.[/muted]",
+        title=f"[tool]{title_name}[/tool]",
+        box=ROUNDED,
+        border_style="primary",
+        padding=(1, 2),
+    ))
+
+    lines.append('\n')
+
+    if containers and containers.get("available"):
+        lmod_path = Path(LMOD_MODULES_PATH)
+        tool_id = tool.get("id", query) if tool else query
+
+        table = Table(
+            title="[header]Available Versions[/header]",
+            box=ROUNDED,
+            border_style="primary",
+            header_style="table.header",
+            show_lines=False,
+        )
+        table.add_column("Version", style="version", no_wrap=True)
+        table.add_column("Buildable", no_wrap=True)
+        table.add_column("Status", no_wrap=True)
+
+        for entry in containers["recent_versions"]:
+            version = entry["version"]
+            buildable = entry["buildable"]
+            installed = any((lmod_path / tool_id).glob(f"{version}*.lua"))
+            buildable_str = "[success]✓[/success]" if buildable else "[muted]✗[/muted]"
+            status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
+            table.add_row(version, buildable_str, status)
+
+        total = containers["total_versions"]
+        shown = len(containers["recent_versions"])
+        if total > shown:
+            table.add_row(
+                f"[muted]+ {total - shown} more[/muted]",
+                "",
+                f"[muted]shelley-bio versions {query}[/muted]",
+            )
+
+        console.print(table)
+
+        if any(not e["buildable"] for e in containers["recent_versions"]):
+            console.print(
+                "[muted]Buildable ✗: Versions not in the shpc registry may still be built, "
+                "but can take a few minutes longer. This is suited for users who need "
+                "a specific older version for reproducibility.[/muted]"
+            )
+
+        console.print(Panel(
+            f"To install the latest version of {title_name}, run:\n\n[command]shelley-bio build {query}[/command]",
+            title="[header]Install[/header]",
+            box=ROUNDED,
+            border_style="info",
+            padding=(0, 2),
+        ))
+    else:
+        console.print(ShelleyStyle.create_warning_panel(
+            "No Containers Available",
+            "No Singularity containers found for this tool in CVMFS.",
+        ))
 
 
 async def query_tool(session: ClientSession, tool_name: str):
     """Query for a specific tool."""
     with ShelleyStyle.create_status(f"Searching for tool: {tool_name}") as status:
         result = await session.call_tool("find_tool", {"tool_name": tool_name})
-    
+
     for content in result.content:
         if hasattr(content, 'text'):
-            console.print(content.text)
+            try:
+                payload = json.loads(content.text)
+                _render_find_tool(payload)
+            except json.JSONDecodeError:
+                console.print(content.text)
 
 
 async def search_function(session: ClientSession, description: str, limit: int = 10):

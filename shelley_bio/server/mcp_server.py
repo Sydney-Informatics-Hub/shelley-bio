@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from shelley_bio.utils.constants import STOP_WORDS
 from shelley_bio.utils.style import console, ShelleyStyle, print_error
+from shelley_bio.builder.cvmfs_builder import get_registry_tags
 
 # MCP SDK imports
 # The MCP server exposes "tools" (callable functions) and "resources" (readable
@@ -130,13 +131,11 @@ class BioFinderIndex:
                 tool_meta = entry
                 break
         
-        # Search for partial matches if exact match not found
+        # Fuzzy-match against all known IDs when no exact match was found
+        suggestions: List[str] = []
         if not tool_meta:
-            for entry in self.metadata:
-                entry_id = entry.get('id', '').lower()
-                if query_lower in entry_id or entry_id in query_lower:
-                    tool_meta = entry
-                    break
+            id_map = {e['id'].lower(): e['id'] for e in self.metadata if e.get('id')}
+            suggestions = [id_map[m] for m in get_close_matches(query_lower, id_map.keys(), n=8, cutoff=0.6)]
         
         # Get containers - try exact match first, then variations
         containers = []
@@ -169,7 +168,8 @@ class BioFinderIndex:
             'query': query,
             'metadata': tool_meta,
             'containers': containers_sorted,
-            'container_count': len(containers_sorted)
+            'container_count': len(containers_sorted),
+            'suggestions': suggestions if not tool_meta else [],
         }
 
     def _normalise(self, text: str) -> List[str]:
@@ -198,7 +198,7 @@ class BioFinderIndex:
         else:
             results.append(str(value))
 
-        return results
+        return list(set(results))  # Remove duplicates
 
     def _search_metadata(self, query: str) -> List[str]:
         """
@@ -430,140 +430,108 @@ async def list_tools() -> list[Tool]:
     ]
 
 
+def _handle_find_tool(tool_name: str) -> str:
+    # Remove version suffixes
+    clean_name = re.sub(r'[:/].*$', '', tool_name).strip()
+    result = index.search_tool(clean_name)
+
+    meta = result['metadata']
+    containers = result['containers']
+
+    tool_payload: Optional[Dict] = None
+    if meta:
+        tool_payload = {
+            "id": meta.get("id", clean_name),
+            "name": meta.get("name", clean_name),
+            "description": meta.get("description") or "",
+            "homepage": meta.get("homepage") or "",
+            "operations": index._flatten_edam(meta.get("edam-operations")),
+            "inputs": index._flatten_edam(meta.get("edam-inputs")),
+            "outputs": index._flatten_edam(meta.get("edam-outputs")),
+        }
+
+    containers_payload: Optional[Dict] = None
+    if containers:
+        seen: set = set()
+        unique_versions: List[Dict] = []
+        tool_id = clean_name
+        registry_tags = get_registry_tags(tool_id)
+        # A version is buildable if any of its build hashes appear in the registry.
+        buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+        for c in containers:
+            short = c["tag"].split("--")[0]
+            if short not in seen:
+                seen.add(short)
+                unique_versions.append({"version": short, "buildable": short in buildable_shorts})
+
+        containers_payload = {
+            "available": True,
+            "recent_versions": unique_versions[:5],
+            "total_versions": len(unique_versions),
+            "install_command": f"shelley-bio build {tool_id}",
+        }
+
+    return json.dumps({
+        "query": clean_name,
+        "found": meta is not None or bool(containers),
+        "suggestions": result.get("suggestions", []),
+        "tool": tool_payload,
+        "containers": containers_payload,
+    })
+
+
+def _handle_search_by_function(description: str, limit: int) -> str:
+    results = index.search_by_description(description)[:limit]
+
+    if not results:
+        return f"No tools found matching '{description}'. Try different keywords or browse available tools."
+
+    parts = [
+        f"\n{'='*70}\n",
+        f"🔎 TOOLS MATCHING: {description}\n",
+        f"{'='*70}\n\n",
+        f"Found {len(results)} matching tools.\n",
+    ]
+    for i, tool_name in enumerate(results, 1):
+        parts.append(f"{i:2}. {tool_name}\n")
+    return "".join(parts)
+
+
+def _handle_get_container_versions(tool_name: str) -> str:
+    result = index.search_tool(tool_name)
+
+    if not result['containers']:
+        return f"No containers found for '{tool_name}'"
+
+    parts = [f"# Container Versions for {tool_name}\n\nTotal versions: {len(result['containers'])}\n\n"]
+    for container in result['containers']:
+        parts.append(f"## Version {container['tag']}\n")
+        parts.append(f"- Path: `{container['path']}`\n")
+        parts.append(f"- Size: {container['size_bytes'] / (1024**2):.1f} MB\n")
+        parts.append(f"- Modified: {datetime.fromtimestamp(container['mtime']).strftime('%Y-%m-%d')}\n\n")
+    return "".join(parts)
+
+
+def _handle_list_available_tools(limit: int) -> str:
+    tools = index.list_all_tools(limit)
+    return f"# Available Bioinformatics Tools ({len(tools)} shown)\n\n" + "\n".join(f"- {tool}" for tool in tools)
+
+
 @app.call_tool()
 async def call_tool(name: str, arguments: Any) -> list[TextContent]:
-    """
-    Handle tool calls based on the tool name and arguments. 
-
-    Piece together responses based on available metadata and container information, formatted for user readability.
-    """
-    
+    """Dispatch tool calls to focused handler functions."""
     if name == "find_tool":
-        tool_name = arguments["tool_name"]
-        result = index.search_tool(tool_name)
-        
-        # Format response
-        response_parts = []
-        
-        # Tool information
-        if result['metadata']:
-            meta = result['metadata']
-            response_parts.append(f"\n{'='*70}\n")
-            response_parts.append(f"🧬 {meta.get('name', tool_name.upper())}\n")
-            response_parts.append(f"{'='*70}\n\n")
-
-            if meta.get('description'):
-                response_parts.append(f"📝 Description:\n")
-                response_parts.append(f"   {meta['description']}\n\n")  
-            
-            if meta.get('homepage'):
-                response_parts.append(f"🌐 Homepage: {meta['homepage']}\n")
-            
-            # Operations
-            if meta.get('edam-operations'):
-                response_parts.append(f"⚙️  Operations: {', '.join(meta['edam-operations'])}\n")
-        else:
-            response_parts.append(f"\n{'='*70}\n")
-            response_parts.append(f"🧬 {tool_name.upper()}\n")
-            response_parts.append(f"{'='*70}\n\n")
-            response_parts.append("ℹ️  No metadata available for this tool\n")
-        
-        # Container information
-        if result['containers']:
-            response_parts.append(f"\n{'─'*70}\n")
-            response_parts.append(f"📦 AVAILABLE CONTAINERS ({result['container_count']} versions)\n")
-            response_parts.append(f"{'─'*70}\n\n")
-            
-            # Most recent version
-            latest = result['containers'][0]
-            response_parts.append(f"✨ Most Recent Version: {latest['tag']}\n\n")
-            response_parts.append(f"   Path: {latest['path']}\n")
-            response_parts.append(f"   Size: {latest['size_bytes'] / (1024**2):.1f} MB\n\n")
-            
-            # Usage example
-            response_parts.append(f"{'─'*70}\n")
-            response_parts.append(f"💡 USAGE EXAMPLES\n")
-            response_parts.append(f"{'─'*70}\n\n")
-            response_parts.append(f"# Execute a command in the container\n")
-            response_parts.append(f"singularity exec {latest['path']} \\\n")
-            response_parts.append(f"  {tool_name} --help\n\n")
-            response_parts.append(f"# Run interactively\n")
-            response_parts.append(f"singularity shell {latest['path']}\n")
-            
-            # Show all versions
-            if len(result['containers']) > 1:
-                response_parts.append(f"\n{'─'*70}\n")
-                response_parts.append(f"📚 OTHER VERSIONS\n")
-                response_parts.append(f"{'─'*70}\n\n")
-                for i, container in enumerate(result['containers'][:3], 1):  # Show top 3
-                    response_parts.append(
-                        f"  {i:2}. {container['tag']}\n"
-                        f"      {container['path']}\n"
-                    )
-                if len(result['containers']) > 3:
-                    response_parts.append(f"   ... and {len(result['containers']) - 3} more versions\n")
-        else:
-            response_parts.append(f"\n⚠️  WARNING: No containers found in CVMFS for this tool\n")
-            response_parts.append(f"   The tool may be available through other means or under a different name.\n")
-        
-        response_parts.append(f"\n{'='*70}\n")
-        return [TextContent(type="text", text="".join(response_parts))]
-    
+        text = _handle_find_tool(arguments["tool_name"])
     elif name == "search_by_function":
-        description = arguments["description"]
-        limit = arguments.get("limit", 10)
-        
-        results = index.search_by_description(description)
-        
-        if not results:
-            return [TextContent(
-                type="text",
-                text=f"No tools found matching '{description}'. Try different keywords or browse available tools."
-            )]
-        
-        response_parts = []
-        response_parts.append(f"\n{'='*70}\n")
-        response_parts.append(f"🔎 TOOLS MATCHING: {description}\n")
-        response_parts.append(f"{'='*70}\n\n")
-        response_parts.append(f"Found {len(results)} matching tools.\n")
-        
-        for i, tool_name in enumerate(results, 1):
-            response_parts.append(f"{i:2}. {tool_name}\n")
-        
-        return [TextContent(type="text", text="".join(response_parts))]
-    
+        text = _handle_search_by_function(arguments["description"], arguments.get("limit", 10))
     elif name == "get_container_versions":
-        tool_name = arguments["tool_name"]
-        result = index.search_tool(tool_name)
-        
-        if not result['containers']:
-            return [TextContent(
-                type="text",
-                text=f"No containers found for '{tool_name}'"
-            )]
-        
-        response_parts = [f"# Container Versions for {tool_name}\n\n"]
-        response_parts.append(f"Total versions: {len(result['containers'])}\n\n")
-        
-        for container in result['containers']:
-            response_parts.append(f"## Version {container['tag']}\n")
-            response_parts.append(f"- Path: `{container['path']}`\n")
-            response_parts.append(f"- Size: {container['size_bytes'] / (10242):.1f} MB\n")
-            response_parts.append(f"- Modified: {datetime.fromtimestamp(container['mtime']).strftime('%Y-%m-%d')}\n\n")
-        
-        return [TextContent(type="text", text="".join(response_parts))]
-    
+        text = _handle_get_container_versions(arguments["tool_name"])
     elif name == "list_available_tools":
-        limit = arguments.get("limit", 50)
-        tools = index.list_all_tools(limit)
-        
-        response = f"# Available Bioinformatics Tools ({len(tools)} shown)\n\n"
-        response += "\n".join(f"- {tool}" for tool in tools)
-        
-        return [TextContent(type="text", text=response)]
-    
+        text = _handle_list_available_tools(arguments.get("limit", 50))
     else:
         raise ValueError(f"Unknown tool: {name}")
+
+    return [TextContent(type="text", text=text)]
 
 
 async def main():

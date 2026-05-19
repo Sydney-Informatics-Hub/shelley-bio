@@ -13,16 +13,62 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
-
+from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH
 from shelley_bio.builder.guts_integration import extract_aliases
+
+def _load_registry_config(uri: str, local_yaml: Path) -> dict:
+    """Return the shpc registry config dict for uri.
+
+    Loads from local_yaml if it exists.  Otherwise fetches the upstream
+    shpc-registry container.yaml and saves it to local_yaml (best-effort;
+    silently skips the write on PermissionError so read-only callers still
+    get a result).  Returns an empty dict if neither source is reachable.
+    """
+    if local_yaml.exists():
+        with open(local_yaml) as f:
+            return yaml.safe_load(f) or {}
+
+    remote_url = (
+        f"https://raw.githubusercontent.com/singularityhub/shpc-registry/main/{uri}/container.yaml"
+    )
+    try:
+        result = subprocess.run(
+            ["curl", "-fsSL", "--max-time", "10", remote_url],
+            capture_output=True, text=True,
+        )
+    except Exception:
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    config = yaml.safe_load(result.stdout) or {}
+
+    try:
+        local_yaml.parent.mkdir(parents=True, exist_ok=True)
+        with open(local_yaml, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    except PermissionError:
+        pass
+
+    return config
+
+
+def get_registry_tags(tool_name: str, local_registry: str = "/apps/local") -> set:
+    """Return the set of version tags known to shpc for tool_name."""
+    uri = f"quay.io/biocontainers/{tool_name}"
+    local_yaml = Path(local_registry) / uri / "container.yaml"
+    config = _load_registry_config(uri, local_yaml)
+    return set(config.get("tags", {}).keys())
+
 
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
     def __init__(
         self,
-        cvmfs_singularity: str = "/cvmfs/singularity.galaxyproject.org/all", 
-        lmod_modules: str = "/apps/Modules/modulefiles"
+        cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH, 
+        lmod_modules: str = LMOD_MODULES_PATH
     ):
         self.cvmfs_singularity = cvmfs_singularity
         self.lmod_modules = lmod_modules
@@ -159,19 +205,17 @@ class CVMFSModuleBuilder:
             ["curl", "-fsSL", remote_url, "-o", str(registry_yaml)],
             capture_output=True, text=True,
         )
+        
+        config = _load_registry_config(uri, registry_yaml)
+        if not config:
+            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
+        elif not config.get("aliases"):
+            config["aliases"] = extract_aliases(container_path)
 
-        if fetch.returncode != 0 or not registry_yaml.exists():
-            config: dict = {"docker": uri, "tags": {}, "filter": [version], "aliases": extract_aliases(container_path)}
-        else:
-            with open(registry_yaml) as f:
-                config = yaml.safe_load(f) or {}
-            if not config.get("aliases"):
-                config["aliases"] = extract_aliases(container_path)
-
-        # Append the missing tag
         if version not in config.get("tags", {}):
             sha256 = self._compute_sha256(container_path)
             config.setdefault("tags", {})[version] = f"sha256:{sha256}"
+            registry_yaml.parent.mkdir(parents=True, exist_ok=True)
             with open(registry_yaml, "w") as f:
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 

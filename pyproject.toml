@@ -32,9 +32,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.23",
-    "mypy>=1.0",
+    "pytest>=6.0",
+    "pytest-asyncio",
+    "pytest-timeout",
+    "black",
+    "flake8",
+    "mypy",
 ]
 
 [project.scripts]
