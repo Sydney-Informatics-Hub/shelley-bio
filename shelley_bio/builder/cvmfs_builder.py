@@ -7,6 +7,7 @@ Builds Lmod module files for tools available in CVMFS.
 
 import hashlib
 import logging
+import shutil
 import subprocess
 import yaml
 from pathlib import Path
@@ -15,9 +16,12 @@ import re
 import questionary
 from datetime import datetime
 from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY
+from shelley_bio.utils import console, ShelleyStyle
 from shelley_bio.builder.guts_integration import extract_aliases
 
 log = logging.getLogger(__name__)
+
+_SHPC = shutil.which("shpc") or "/opt/shpc/bin/shpc"
 
 def _load_registry_config(uri: str, local_yaml: Path) -> dict:
     """Return the shpc registry config dict for uri.
@@ -190,7 +194,7 @@ class CVMFSModuleBuilder:
         log.info(msg)
         
         result = subprocess.run(
-            ["shpc", "install", uri_tag, container_path, "--keep-path"],
+            [_SHPC, "install", uri_tag, container_path, "--keep-path"],
             capture_output=True, text=True,
         )
         return result.returncode, result.stdout + result.stderr
@@ -199,12 +203,12 @@ class CVMFSModuleBuilder:
         """Ensure local_registry is in shpc's registry search path (best-effort)."""
         try:
             result = subprocess.run(
-                ["shpc", "config", "get", "registry"],
+                [_SHPC, "config", "get", "registry"],
                 capture_output=True, text=True,
             )
             if local_registry not in result.stdout:
                 subprocess.run(
-                    ["shpc", "config", "add", "registry", local_registry],
+                    [_SHPC, "config", "add", "registry", local_registry],
                     capture_output=True, text=True, check=True,
                 )
                 log.info("Registered local registry with shpc: %s", local_registry)
@@ -222,6 +226,11 @@ class CVMFSModuleBuilder:
         appends the missing tag+SHA256.  If the tool is entirely absent from
         the upstream registry a minimal container.yaml is created instead.
         """
+        console.print(ShelleyStyle.create_warning_panel(
+            "Tag not in registry",
+            f"{uri}:{version} is not in the upstream shpc-registry. "
+            f"Creating a local entry in {local_registry} and retrying.",
+        ))
         registry_dir = Path(local_registry) / uri
         registry_yaml = registry_dir / "container.yaml"
         registry_dir.mkdir(parents=True, exist_ok=True)
@@ -280,20 +289,20 @@ class CVMFSModuleBuilder:
 
         returncode, output = self._run_shpc_install(uri_tag, container_path)
 
-        if returncode != 0:
+        if returncode:
             if self._is_registry_miss(output):
                 self._ensure_local_registry_entry(tool_name, version, container_path, uri,
                                                   local_registry=LOCAL_REGISTRY)
                 self._register_local_registry(LOCAL_REGISTRY)
                 returncode, output = self._run_shpc_install(uri_tag, container_path)
 
-            if returncode != 0:
+            if returncode:
                 raise RuntimeError(
                     f"shpc install failed for {uri_tag}:\n{output.strip()}"
                 )
 
         shpc_module_base = Path(subprocess.run(
-            ["shpc", "config", "get", "module_base"],
+            [_SHPC, "config", "get", "module_base"],
             capture_output=True, text=True, check=True,
         ).stdout.strip())
         src = shpc_module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"

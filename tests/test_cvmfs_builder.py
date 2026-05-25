@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """pytest coverage for CVMFSModuleBuilder: version resolution and shpc-based installation."""
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,7 +30,6 @@ FAKE_VERSIONS = [
 def builder(tmp_path) -> CVMFSModuleBuilder:
     return CVMFSModuleBuilder(lmod_modules=str(tmp_path / "modulefiles"))
 
-
 def _make_subprocess_run(shpc_base: Path, install_rc: int = 0,
                          install_out: str = "Module was created.\n"):
     """Return a subprocess.run side-effect that handles shpc install and config calls."""
@@ -44,6 +44,25 @@ def _make_subprocess_run(shpc_base: Path, install_rc: int = 0,
             m.stdout = install_out
         return m
     return fake_run
+
+
+# ---------------------------------------------------------------------------
+# Environment pre-flight
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cvmfs
+def test_shpc_is_executable():
+    """Fallback path /opt/shpc/bin/shpc is present and executable even without module load."""
+    result = subprocess.run(["/opt/shpc/bin/shpc", "--version"], capture_output=True, text=True)
+    assert result.returncode == 0, f"shpc --version failed: {result.stderr}"
+
+@pytest.mark.cvmfs
+def test_shpc_on_path():
+    """shpc must be on PATH for all build operations. Fix: module load shpc"""
+    assert shutil.which("shpc") is not None, (
+        "shpc not found on PATH, run 'module load shpc' before using shelley-bio build "
+        "or running the CVMFS integration tests."
+    )
 
 
 # ---------------------------------------------------------------------------
