@@ -101,9 +101,50 @@ shelley_bio/data/guts_db/
 Commit the JSON. It is bundled with the package (hatchling includes `shelley_bio/**`
 by default) and loaded automatically — no code changes required for new base images.
 
+#### Current manifests
+
+| Image | Install path | Purpose |
+|-------|-------------|---------|
+| `anaconda/miniconda:latest` | `/opt/miniconda3/bin` | Base conda tooling |
+| `continuumio/miniconda3:latest` | `/opt/conda/bin` | Python-3 conda layer used by BioContainers |
+
+Both are kept because they cover slightly different conda installations.
+BioContainers packages install into `/opt/conda/bin`; without the `continuumio/miniconda3`
+manifest, ~100 extra conda-infrastructure executables appear as tool aliases.
+
+To refresh or add a new manifest (Singularity must be on PATH):
+
+```bash
+# anaconda/miniconda
+uv run guts manifest -c singularity -i fs -i paths \
+    -o shelley_bio/data/guts_db/docker.io/anaconda/miniconda/latest.json \
+    anaconda/miniconda
+
+# continuumio/miniconda3
+uv run guts manifest -c singularity -i fs -i paths \
+    -o shelley_bio/data/guts_db/docker.io/continuumio/miniconda3/latest.json \
+    continuumio/miniconda3
+```
+
 **When to refresh:** when a base image's conda version makes a major jump (e.g.
 Python 3.10 → 3.12) and tool manifests suddenly gain or lose many entries.
-The current manifest covers `anaconda/miniconda:latest` as of 2026-05.
+
+## Known issues
+
+### `shpc` must be on PATH
+
+All `shelley-bio build` operations and the CVMFS integration tests call `shpc` as a
+subprocess. `shpc` is installed at `/opt/shpc/bin/shpc` and is not on the default PATH —
+it must be loaded before use:
+
+```bash
+module load shpc
+```
+
+In environments without the module system (e.g. GitHub Actions CI), the test
+`test_run_shpc_install_missing_cvmfs_path` will fail with `FileNotFoundError` rather than
+being skipped. This is a tracked known issue; the test is intentionally left as a
+documented failure until shpc path discovery is added to the builder.
 
 ## Developer setup
 
