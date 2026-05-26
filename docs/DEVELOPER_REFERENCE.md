@@ -58,6 +58,17 @@ the Bioconda convention: `<version>--<build_string>`.
 
 This should be regenerated periodically.
 
+### Local registry behaviour
+
+When a tool/version is absent from the upstream shpc-registry, `shelley-bio build`
+creates a local `container.yaml` under `/apps/local/<uri>/` and retries.
+
+**Aliases are always version-specific.** Each build call regenerates the `aliases` field
+from the exact CVMFS SIF being installed via `guts diff`. Aliases are never inherited
+from a previously-installed version of the same tool — doing so would produce wrapper
+scripts for binaries absent in the older container (e.g. `salmon` appearing in a
+`star-fusion 1.0.0` module because it was extracted from `1.10.1`).
+
 ### `shelley_bio/data/guts_db/` — supplementary guts manifest database
 
 When `extract_aliases` diffs a CVMFS SIF to discover a tool's executables, it compares

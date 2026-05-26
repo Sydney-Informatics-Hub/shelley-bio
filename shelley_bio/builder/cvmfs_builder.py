@@ -218,50 +218,61 @@ class CVMFSModuleBuilder:
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
         local_registry: str = LOCAL_REGISTRY,
-    ) -> None:
+    ) -> bool:
         """
-        Create or update a local shpc registry entry for a CVMFS-only tag.
+        Create or update a local shpc registry entry for a specific CVMFS tag.
 
-        Fetches the upstream container.yaml for the URI if available, then
-        appends the missing tag+SHA256.  If the tool is entirely absent from
-        the upstream registry a minimal container.yaml is created instead.
+        Aliases are always regenerated via guts from the supplied container_path so
+        that wrappers for each installed version reflect only the binaries present in
+        that container.  Reusing aliases across versions would produce wrappers for
+        binaries absent in older containers (e.g. salmon appearing in star-fusion 1.0.0).
+
+        Returns True if this version was newly created (not present in the upstream
+        registry), which callers use to decide whether to show a "local entry" notice.
         """
-        console.print(ShelleyStyle.create_warning_panel(
-            "Tag not in registry",
-            f"{uri}:{version} is not in the upstream shpc-registry. "
-            f"Creating a local entry in {local_registry} and retrying.",
-        ))
         registry_dir = Path(local_registry) / uri
         registry_yaml = registry_dir / "container.yaml"
         registry_dir.mkdir(parents=True, exist_ok=True)
 
-        # Try to pull the existing upstream entry
+        # Always regenerate aliases from the specific container being installed.
+        # Inheriting cached aliases from a different version produces wrappers for
+        # binaries absent in this container.
+        aliases = extract_aliases(container_path)
+        if not aliases:
+            log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+
+        # Download upstream entry (best-effort; may not have this version)
         remote_url = (
             f"https://raw.githubusercontent.com/singularityhub/shpc-registry/main/{uri}/container.yaml"
         )
-        fetch = subprocess.run(
+        subprocess.run(
             ["curl", "-fsSL", remote_url, "-o", str(registry_yaml)],
             capture_output=True, text=True,
         )
-        
+
         config = _load_registry_config(uri, registry_yaml)
+        newly_created = False
         if not config:
-            aliases = extract_aliases(container_path)
-            if not aliases:
-                log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
             config = {"docker": uri, "tags": {}, "filter": [version], "aliases": aliases}
-        elif not config.get("aliases"):
-            aliases = extract_aliases(container_path)
-            if not aliases:
-                log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+            newly_created = True
+        else:
             config["aliases"] = aliases
 
         if version not in config.get("tags", {}):
             sha256 = self._compute_sha256(container_path)
             config.setdefault("tags", {})[version] = f"sha256:{sha256}"
-            registry_yaml.parent.mkdir(parents=True, exist_ok=True)
-            with open(registry_yaml, "w") as f:
-                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+            newly_created = True
+
+        # Always write — aliases must reflect this specific version's SIF
+        registry_yaml.parent.mkdir(parents=True, exist_ok=True)
+        with open(registry_yaml, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        return newly_created
+
+    def _shpc_uninstall(self, uri_tag: str) -> None:
+        """Uninstall an existing shpc entry (best-effort; ignores errors)."""
+        subprocess.run([_SHPC, "uninstall", "--force", uri_tag], capture_output=True, text=True)
 
     def shpc_install(self, tool_name: str, version: str) -> Path:
         """
@@ -271,14 +282,15 @@ class CVMFSModuleBuilder:
         put tool binaries on $PATH after `module load`.
 
         Steps:
-          1. shpc install <uri>:<tag> <cvmfs-path> --keep-path
-          2. If the tag is absent from the registry, create a local registry
-             entry (fetching upstream container.yaml + computed SHA-256) and retry.
+          1. Update local registry with version-specific aliases extracted via guts.
+          2. shpc install <uri>:<tag> <cvmfs-path> --keep-path
+             If shpc reports a path-exists conflict, uninstall the old entry and retry.
           3. Symlink <lmod_modules>/<tool>/<version>.lua -> shpc module.lua so
              `module load <tool>/<version>` works.
 
-        shpc view install is not used — it re-pulls from Docker rather than
-        reusing the --keep-path CVMFS install.
+        Aliases are always regenerated from the specific CVMFS SIF rather than
+        inherited from the upstream registry, which carries aliases from the latest
+        version and would create wrappers for binaries absent in older containers.
 
         Returns:
             Path to the symlinked .lua file (the user-facing module path).
@@ -287,19 +299,27 @@ class CVMFSModuleBuilder:
         uri_tag = f"{uri}:{version}"
         container_path = str(self.cvmfs_singularity_path / f"{tool_name}:{version}")
 
+        # Always write version-specific aliases before shpc sees the registry.
+        newly_created = self._ensure_local_registry_entry(tool_name, version, container_path, uri)
+        self._register_local_registry(LOCAL_REGISTRY)
+        if newly_created:
+            console.print(ShelleyStyle.create_warning_panel(
+                "Tag not in registry",
+                f"{uri}:{version} is not in the upstream shpc-registry. "
+                f"A local entry has been created in {LOCAL_REGISTRY}.",
+            ))
+
         returncode, output = self._run_shpc_install(uri_tag, container_path)
 
         if returncode:
-            if self._is_registry_miss(output):
-                self._ensure_local_registry_entry(tool_name, version, container_path, uri,
-                                                  local_registry=LOCAL_REGISTRY)
-                self._register_local_registry(LOCAL_REGISTRY)
-                returncode, output = self._run_shpc_install(uri_tag, container_path)
+            # Retry once after clearing a stale shpc install (path-exists conflict)
+            self._shpc_uninstall(uri_tag)
+            returncode, output = self._run_shpc_install(uri_tag, container_path)
 
-            if returncode:
-                raise RuntimeError(
-                    f"shpc install failed for {uri_tag}:\n{output.strip()}"
-                )
+        if returncode:
+            raise RuntimeError(
+                f"shpc install failed for {uri_tag}:\n{output.strip()}"
+            )
 
         shpc_module_base = Path(subprocess.run(
             [_SHPC, "config", "get", "module_base"],

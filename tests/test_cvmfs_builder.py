@@ -147,7 +147,8 @@ def test_shpc_install_success(builder, tmp_path):
     src.touch()
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
-               side_effect=_make_subprocess_run(shpc_base)):
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
         dest = builder.shpc_install(tool, version)
 
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
@@ -155,8 +156,8 @@ def test_shpc_install_success(builder, tmp_path):
     assert dest.resolve() == src.resolve()
 
 
-def test_shpc_install_registry_miss_retries(builder, tmp_path):
-    """Registry miss on first attempt triggers local entry creation then a retry."""
+def test_shpc_install_retries_after_uninstall(builder, tmp_path):
+    """If shpc install fails (e.g. path-exists conflict), uninstall and retry once."""
     tool, version = "samtools", "1.21--h96c455f_1"
     shpc_base = tmp_path / "shpc_modules"
     src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
@@ -164,6 +165,7 @@ def test_shpc_install_registry_miss_retries(builder, tmp_path):
     src.touch()
 
     install_calls = {"n": 0}
+    uninstall_calls = {"n": 0}
 
     def fake_run(cmd, **_):
         m = MagicMock()
@@ -174,32 +176,37 @@ def test_shpc_install_registry_miss_retries(builder, tmp_path):
         elif "config" in cmd:
             m.returncode = 0
             m.stdout = ""
+        elif "uninstall" in cmd:
+            uninstall_calls["n"] += 1
+            m.returncode = 0
+            m.stdout = ""
         else:
             install_calls["n"] += 1
             if install_calls["n"] == 1:
                 m.returncode = 1
-                m.stdout = "quay.io/biocontainers/samtools:1.21--h96c455f_1 is not a known identifier."
+                m.stdout = "Error creating path, exiting."
             else:
                 m.returncode = 0
                 m.stdout = "Module was created.\n"
         return m
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
+         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
         dest = builder.shpc_install(tool, version)
 
-    mock_ensure.assert_called_once()
     assert install_calls["n"] == 2
+    assert uninstall_calls["n"] == 1
     assert dest.is_symlink()
 
 
 def test_shpc_install_hard_failure_raises(builder, tmp_path):
-    """Non-registry shpc failure raises RuntimeError containing the shpc output."""
+    """Persistent shpc failure (both attempts) raises RuntimeError containing the output."""
     shpc_base = tmp_path / "shpc_modules"
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base, install_rc=1,
-                                                install_out="Unexpected shpc error")):
+                                                install_out="Unexpected shpc error")), \
+         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
         with pytest.raises(RuntimeError, match="shpc install failed"):
             builder.shpc_install("samtools", "1.21--h96c455f_1")
 
@@ -284,13 +291,19 @@ def test_ensure_local_registry_populates_aliases_on_miss(builder, tmp_path):
     assert config["aliases"] == fake_aliases
 
 
-def test_ensure_local_registry_fills_empty_upstream_aliases(builder, tmp_path):
-    """When upstream container.yaml has empty aliases, guts diff fills them in."""
+def test_ensure_local_registry_always_regenerates_aliases(builder, tmp_path):
+    """Aliases from a previous version are replaced by guts diff for the current container.
+
+    Stale aliases (e.g. salmon from star-fusion 1.10.1) must not carry over to an older
+    install that doesn't have those binaries.
+    """
     fake_aliases = [{"name": "samtools", "command": "samtools"}]
+    stale_aliases = [{"name": "salmon", "command": "salmon"}, {"name": "samtools", "command": "samtools"}]
     registry_dir = tmp_path / "quay.io/biocontainers/samtools"
     registry_dir.mkdir(parents=True)
+    # Pre-existing entry with non-empty aliases from a different version
     (registry_dir / "container.yaml").write_text(
-        "docker: quay.io/biocontainers/samtools\naliases: []\ntags: {}\n"
+        f"docker: quay.io/biocontainers/samtools\naliases: {stale_aliases}\ntags: {{}}\n"
     )
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run") as mock_run, \
          patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
@@ -316,8 +329,9 @@ def test_extract_aliases_returns_empty_on_failure():
     assert result == []
 
 
-def test_shpc_install_in_registry_skips_local_entry(builder, tmp_path):
-    """Happy path: tool already in registry — _ensure_local_registry_entry is never called."""
+def test_shpc_install_always_updates_local_registry(builder, tmp_path):
+    """_ensure_local_registry_entry is always called to keep aliases version-specific,
+    even when shpc succeeds on the first attempt."""
     tool, version = "samtools", "1.21--h96c455f_1"
     shpc_base = tmp_path / "shpc_modules"
     src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
@@ -326,10 +340,14 @@ def test_shpc_install_in_registry_skips_local_entry(builder, tmp_path):
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
+         patch.object(builder, "_ensure_local_registry_entry", return_value=False) as mock_ensure:
         dest = builder.shpc_install(tool, version)
 
-    mock_ensure.assert_not_called()
+    mock_ensure.assert_called_once_with(
+        tool, version,
+        str(builder.cvmfs_singularity_path / f"{tool}:{version}"),
+        f"quay.io/biocontainers/{tool}",
+    )
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
@@ -356,9 +374,9 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
         elif "curl" in cmd:
             m.returncode = 1
             m.stdout = ""
-        elif "config" in cmd:
+        elif "config" in cmd or "uninstall" in cmd:
             m.returncode = 0
-            m.stdout = ""  # registry not listed → add will be called; both are no-ops here
+            m.stdout = ""
         else:
             install_calls["n"] += 1
             if install_calls["n"] == 1:
