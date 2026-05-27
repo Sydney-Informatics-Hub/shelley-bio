@@ -1,5 +1,16 @@
 # Developer reference
 
+## Key paths
+
+Paths involved in a `shelley-bio build` run, in the order they are touched:
+
+| Path | Written by | Why it matters |
+|------|-----------|----------------|
+| `/cvmfs/singularity.galaxyproject.org/all/` | Galaxy Project (read-only) | Source SIF files; `shelley-bio build` reads from here, never writes |
+| `/apps/local/` | `shelley-bio build` | Local shpc registry: `container.yaml` files for tool versions **absent** from the upstream shpc-registry; only created for the local path |
+| `/apps/shpc/` | shpc | shpc install base; contains `modules/` (generated `module.lua` + wrapper scripts) and `containers/` |
+| `/apps/Modules/modulefiles/<tool>/<version>.lua` | `shelley-bio build` | Symlink into `/apps/shpc/modules/`; this is what `module avail` and `module load <tool>/<version>` resolves |
+
 ## Data sources
 
 ### `toolfinder_meta.yaml`
