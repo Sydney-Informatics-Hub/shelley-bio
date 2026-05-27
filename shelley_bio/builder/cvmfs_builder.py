@@ -15,7 +15,7 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
-from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY
+from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
 from shelley_bio.utils import console, ShelleyStyle
 from shelley_bio.builder.guts_integration import extract_aliases
 
@@ -319,6 +319,17 @@ class CVMFSModuleBuilder:
         if returncode:
             raise RuntimeError(
                 f"shpc install failed for {uri_tag}:\n{output.strip()}"
+            )
+
+        # When running as root via sudo, new shpc dirs are created as root.
+        # Restore ownership to the original user so non-root shpc calls (e.g. tests)
+        # can write to the same paths without re-running as root.
+        import os as _os
+        sudo_user = _os.environ.get("SUDO_USER")
+        if _os.getuid() == 0 and sudo_user:
+            subprocess.run(
+                ["chown", "-R", f"{sudo_user}:{sudo_user}", SHPC_BASE],
+                capture_output=True, text=True,
             )
 
         shpc_module_base = Path(subprocess.run(
