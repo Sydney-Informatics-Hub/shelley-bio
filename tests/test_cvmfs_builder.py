@@ -413,3 +413,84 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
     assert install_calls["n"] == 2
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
+
+
+# ---------------------------------------------------------------------------
+# CVMFS regression: star-fusion 1.0.0 alias correctness
+# ---------------------------------------------------------------------------
+
+@pytest.mark.cvmfs
+def test_extract_aliases_star_fusion_1_0_0():
+    """star-fusion 1.0.0 must alias STAR but never salmon.
+
+    Regression: salmon appeared because aliases were inherited from a newer
+    build (which bundles salmon) rather than extracted from the 1.0.0 SIF.
+    Requires Singularity on PATH (in addition to CVMFS).
+    """
+    if shutil.which("singularity") is None:
+        pytest.skip("singularity not on PATH")
+    from shelley_bio.builder.guts_integration import extract_aliases
+    sif = "/cvmfs/singularity.galaxyproject.org/all/star-fusion:1.0.0--pl5.22.0_0"
+    aliases = extract_aliases(sif)
+    alias_names = {a["name"] for a in aliases}
+    assert "STAR" in alias_names, f"STAR should be aliased; got: {sorted(alias_names)}"
+    assert "salmon" not in alias_names, f"salmon must NOT be aliased; got: {sorted(alias_names)}"
+
+
+# ---------------------------------------------------------------------------
+# CVMFS regression: newly_created flag
+# ---------------------------------------------------------------------------
+
+_CVMFS = "/cvmfs/singularity.galaxyproject.org/all"
+
+
+@pytest.mark.cvmfs
+@pytest.mark.parametrize("tool,version", [
+    ("fastp",       "0.20.0--hdbcaa40_0"),
+    ("sambamba",    "0.8.1--hadffe2f_1"),
+    ("samblaster",  "0.1.24--hc9558a2_3"),
+    ("samtools",    "1.19--h50ea8bc_0"),
+    ("blast",       "2.5.0--hc0b0e79_3"),
+    ("star-fusion", "1.0.0--pl5.22.0_0"),
+])
+def test_ensure_local_registry_entry_newly_created(builder, tmp_path, tool, version):
+    """Tools absent from upstream registry produce newly_created=True."""
+    with patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=[]), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        result = builder._ensure_local_registry_entry(
+            tool, version, f"{_CVMFS}/{tool}:{version}",
+            f"quay.io/biocontainers/{tool}", local_registry=str(tmp_path),
+        )
+    assert result is True, f"{tool}:{version} should be newly_created (not in upstream registry)"
+
+
+@pytest.mark.cvmfs
+@pytest.mark.parametrize("tool,version", [
+    ("fastqc",   "0.12.1--hdfd78af_0"),
+    ("multiqc",  "1.19--pyhdfd78af_0"),
+    ("salmon",   "1.10.1--h7e5ed60_0"),
+    ("bcftools", "1.23.1--hb2cee57_0"),
+    ("bwa-mem2", "2.2.1--he70b90d_8"),
+    ("star",     "2.7.11a--h0033a41_0"),
+])
+def test_ensure_local_registry_entry_upstream_known(builder, tmp_path, tool, version):
+    """Tools present in upstream registry produce newly_created=False."""
+    with patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=[]), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        result = builder._ensure_local_registry_entry(
+            tool, version, f"{_CVMFS}/{tool}:{version}",
+            f"quay.io/biocontainers/{tool}", local_registry=str(tmp_path),
+        )
+    assert result is False, f"{tool}:{version} should already be in upstream registry"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: tools absent from CVMFS raise ValueError
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("tool_name", ["parabricks", "seurat"])
+def test_search_tool_version_not_in_cvmfs(builder, tool_name):
+    """Tools absent from CVMFS raise ValueError with an informative message."""
+    with patch.object(builder, "_get_available_tools", return_value=[]):
+        with pytest.raises(ValueError, match="not found"):
+            builder.search_tool_version(tool_name)

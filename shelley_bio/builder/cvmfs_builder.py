@@ -430,6 +430,12 @@ class CVMFSModuleBuilder:
         # Get available versions as (tool, full_version) tuples
         available_versions = self._get_available_tools(tool_name)
 
+        if not available_versions:
+            raise ValueError(
+                f"'{tool_name}' not found in CVMFS at {self.cvmfs_singularity}. "
+                "Check the tool name and that CVMFS is mounted."
+            )
+
         if requested_version is None:
             # If no version was specified, return the latest version
             final_tool, final_version = self._get_latest_version(available_versions)

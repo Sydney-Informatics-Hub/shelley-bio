@@ -140,6 +140,38 @@ uv run guts manifest -c singularity -i fs -i paths \
 **When to refresh:** when a base image's conda version makes a major jump (e.g.
 Python 3.10 → 3.12) and tool manifests suddenly gain or lose many entries.
 
+## Regression tool matrix
+
+The 14 tools below are the canonical regression set for `shelley-bio build`.
+Each row captures the exact CVMFS version, whether a local registry entry must be created
+(`newly_created=True` means the upstream shpc-registry does not carry this build), and
+the expected key aliases that the Lmod module should expose.
+
+The `newly_created` flag is verified by `test_ensure_local_registry_entry_newly_created`
+and `test_ensure_local_registry_entry_upstream_known` in `tests/test_cvmfs_builder.py`.
+
+| Tool | Canonical version (CVMFS) | In upstream registry | newly_created | Key aliases |
+|------|---------------------------|---------------------|---------------|-------------|
+| fastqc | `0.12.1--hdfd78af_0` | ✓ | False | `fastqc` |
+| multiqc | `1.19--pyhdfd78af_0` | ✓ | False | `multiqc` |
+| salmon | `1.10.1--h7e5ed60_0` | ✓ | False | `salmon` |
+| bcftools | `1.23.1--hb2cee57_0` | ✓ | False | `bcftools` |
+| bwa-mem2 | `2.2.1--he70b90d_8` | ✓ | False | `bwa-mem2` |
+| fastp | `0.20.0--hdbcaa40_0` | ✗ (only ≥0.23.x) | True | `fastp` |
+| sambamba | `0.8.1--hadffe2f_1` | ✗ (only ≥1.0.x) | True | `sambamba` |
+| samblaster | `0.1.24--hc9558a2_3` | ✗ (only ≥0.1.25) | True | `samblaster` |
+| samtools | `1.19--h50ea8bc_0` | ✗ (only `0.1.19`) | True | `samtools` |
+| blast | `2.5.0--hc0b0e79_3` | ✗ | True | `blastn`, `blastp`, `blastx` |
+| star | `2.7.11a--h0033a41_0` | ✓ | False | `STAR` |
+| star-fusion | `1.0.0--pl5.22.0_0` | ✗ (only ≥1.9.1) | True | `STAR` (not `salmon`) |
+| parabricks | n/a | ✗ | n/a | not in CVMFS — raises `ValueError` |
+| seurat | n/a | ✗ | n/a | not in CVMFS — raises `ValueError` |
+
+> **star-fusion 1.0.0 regression note:** `salmon` must NOT appear as an alias. It was
+> incorrectly present when aliases were inherited from a newer build of the same tool.
+> The fix (always regenerate aliases from the specific SIF) is tested by
+> `test_extract_aliases_star_fusion_1_0_0` (requires Singularity on PATH to run).
+
 ## Known issues
 
 ### `shpc` must be on PATH
