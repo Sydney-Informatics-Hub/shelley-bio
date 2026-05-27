@@ -12,7 +12,7 @@ import pytest
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from shelley_bio.builder.cvmfs_builder import CVMFSModuleBuilder
+from shelley_bio.builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
 from shelley_bio.client.cli import build_module
 
 # ---------------------------------------------------------------------------
@@ -148,9 +148,12 @@ def test_shpc_install_success(builder, tmp_path):
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags",
+               return_value={version}), \
+         patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
 
+    mock_ensure.assert_not_called()
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
@@ -191,7 +194,7 @@ def test_shpc_install_retries_after_uninstall(builder, tmp_path):
         return m
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value={version}):
         dest = builder.shpc_install(tool, version)
 
     assert install_calls["n"] == 2
@@ -202,13 +205,14 @@ def test_shpc_install_retries_after_uninstall(builder, tmp_path):
 def test_shpc_install_hard_failure_raises(builder, tmp_path):
     """Persistent shpc failure (both attempts) raises RuntimeError containing the output."""
     shpc_base = tmp_path / "shpc_modules"
+    version = "1.21--h96c455f_1"
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base, install_rc=1,
                                                 install_out="Unexpected shpc error")), \
-         patch.object(builder, "_ensure_local_registry_entry", return_value=False):
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value={version}):
         with pytest.raises(RuntimeError, match="shpc install failed"):
-            builder.shpc_install("samtools", "1.21--h96c455f_1")
+            builder.shpc_install("samtools", version)
 
 
 # ---------------------------------------------------------------------------
@@ -329,9 +333,8 @@ def test_extract_aliases_returns_empty_on_failure():
     assert result == []
 
 
-def test_shpc_install_always_updates_local_registry(builder, tmp_path):
-    """_ensure_local_registry_entry is always called to keep aliases version-specific,
-    even when shpc succeeds on the first attempt."""
+def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
+    """When version is in upstream registry, _ensure_local_registry_entry is not called."""
     tool, version = "samtools", "1.21--h96c455f_1"
     shpc_base = tmp_path / "shpc_modules"
     src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
@@ -340,22 +343,20 @@ def test_shpc_install_always_updates_local_registry(builder, tmp_path):
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch.object(builder, "_ensure_local_registry_entry", return_value=False) as mock_ensure:
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags",
+               return_value={version}), \
+         patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
 
-    mock_ensure.assert_called_once_with(
-        tool, version,
-        str(builder.cvmfs_singularity_path / f"{tool}:{version}"),
-        f"quay.io/biocontainers/{tool}",
-    )
+    mock_ensure.assert_not_called()
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
 
 
 def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
-    """Full chain: shpc miss → _ensure_local_registry_entry runs → extract_aliases called
-    → YAML written with aliases → retry succeeds → symlink created."""
+    """Full chain: version absent from upstream → _ensure_local_registry_entry runs
+    → extract_aliases called → YAML written with aliases → single shpc install → symlink."""
     tool, version = "bwa", "0.7.17--hed695b0_7"
     shpc_base = tmp_path / "shpc_modules"
     src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
@@ -379,12 +380,8 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
             m.stdout = ""
         else:
             install_calls["n"] += 1
-            if install_calls["n"] == 1:
-                m.returncode = 1
-                m.stdout = f"{tool}:{version} is not a known identifier."
-            else:
-                m.returncode = 0
-                m.stdout = "Module was created.\n"
+            m.returncode = 0
+            m.stdout = "Module was created.\n"
         return m
 
     fake_aliases = [{"name": "bwa", "command": "bwa"}]
@@ -397,6 +394,7 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
     expected_cvmfs = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
 
     with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
          patch.object(builder, "_ensure_local_registry_entry", side_effect=wrapped_ensure), \
          patch("shelley_bio.builder.cvmfs_builder.extract_aliases",
                return_value=fake_aliases) as mock_extract, \
@@ -410,9 +408,46 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
         (local_registry / "quay.io" / "biocontainers" / tool / "container.yaml").read_text()
     )
     assert config["aliases"] == fake_aliases
-    assert install_calls["n"] == 2
+    assert install_calls["n"] == 1
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
+
+
+def test_shpc_install_creates_local_entry_when_not_in_upstream(builder, tmp_path):
+    """Version absent from upstream: _shpc_uninstall, then _ensure_local_registry_entry,
+    then a single shpc install (no retry)."""
+    tool, version = "fastp", "0.20.0--hdbcaa40_0"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    call_order = []
+
+    def fake_run(cmd, **_):
+        m = MagicMock()
+        m.stderr = ""
+        if "module_base" in cmd:
+            m.returncode = 0; m.stdout = str(shpc_base)
+        elif "uninstall" in cmd:
+            call_order.append("uninstall"); m.returncode = 0; m.stdout = ""
+        elif "config" in cmd:
+            m.returncode = 0; m.stdout = ""
+        else:
+            call_order.append("install"); m.returncode = 0; m.stdout = "Module was created.\n"
+        return m
+
+    def fake_ensure(*args, **kwargs):
+        call_order.append("ensure")
+
+    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
+         patch.object(builder, "_ensure_local_registry_entry", side_effect=fake_ensure), \
+         patch.object(builder, "_register_local_registry"):
+        dest = builder.shpc_install(tool, version)
+
+    assert call_order == ["uninstall", "ensure", "install"]
+    assert dest.is_symlink()
 
 
 # ---------------------------------------------------------------------------
@@ -454,14 +489,18 @@ _CVMFS = "/cvmfs/singularity.galaxyproject.org/all"
     ("star-fusion", "1.0.0--pl5.22.0_0"),
 ])
 def test_ensure_local_registry_entry_newly_created(builder, tmp_path, tool, version):
-    """Tools absent from upstream registry produce newly_created=True."""
+    """Tools absent from upstream registry: _ensure_local_registry_entry writes the YAML tag."""
     with patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=[]), \
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
-        result = builder._ensure_local_registry_entry(
+        builder._ensure_local_registry_entry(
             tool, version, f"{_CVMFS}/{tool}:{version}",
             f"quay.io/biocontainers/{tool}", local_registry=str(tmp_path),
         )
-    assert result is True, f"{tool}:{version} should be newly_created (not in upstream registry)"
+    import yaml
+    config = yaml.safe_load(
+        (tmp_path / f"quay.io/biocontainers/{tool}/container.yaml").read_text()
+    )
+    assert version in config.get("tags", {}), f"{tool}:{version} tag missing from written YAML"
 
 
 @pytest.mark.cvmfs
@@ -473,15 +512,10 @@ def test_ensure_local_registry_entry_newly_created(builder, tmp_path, tool, vers
     ("bwa-mem2", "2.2.1--he70b90d_8"),
     ("star",     "2.7.11a--h0033a41_0"),
 ])
-def test_ensure_local_registry_entry_upstream_known(builder, tmp_path, tool, version):
-    """Tools present in upstream registry produce newly_created=False."""
-    with patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=[]), \
-         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
-        result = builder._ensure_local_registry_entry(
-            tool, version, f"{_CVMFS}/{tool}:{version}",
-            f"quay.io/biocontainers/{tool}", local_registry=str(tmp_path),
-        )
-    assert result is False, f"{tool}:{version} should already be in upstream registry"
+def test_get_registry_tags_upstream_only_finds_known_versions(tool, version):
+    """get_registry_tags(upstream_only=True) finds versions present in upstream shpc-registry."""
+    tags = get_registry_tags(tool, upstream_only=True)
+    assert version in tags, f"{tool}:{version} not in upstream tags; got: {sorted(tags)[:5]}"
 
 
 # ---------------------------------------------------------------------------

@@ -112,6 +112,32 @@ class TestLoadRegistryConfig:
 
         assert config["tags"] == REMOTE_CONFIG["tags"]
 
+    def test_force_upstream_ignores_local_file(self, tmp_path):
+        """force_upstream=True bypasses the local cache and fetches from GitHub."""
+        local_yaml = tmp_path / URI / "container.yaml"
+        local_yaml.parent.mkdir(parents=True)
+        stale_config = {"docker": URI, "tags": {"stale--tag_0": "sha256:000"}, "aliases": []}
+        local_yaml.write_text(yaml.dump(stale_config))
+
+        upstream_config = {**REMOTE_CONFIG}
+        with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+                   return_value=_curl_success(upstream_config)) as mock_run:
+            config = _load_registry_config(URI, local_yaml, force_upstream=True)
+
+        mock_run.assert_called_once()
+        assert "stale--tag_0" not in config.get("tags", {})
+        assert "1.21--h96c455f_1" in config["tags"]
+
+    def test_force_upstream_does_not_write_to_disk(self, tmp_path):
+        """force_upstream=True does not overwrite the local cache file."""
+        local_yaml = tmp_path / URI / "container.yaml"
+
+        with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+                   return_value=_curl_success(REMOTE_CONFIG)):
+            _load_registry_config(URI, local_yaml, force_upstream=True)
+
+        assert not local_yaml.exists()
+
 
 # ---------------------------------------------------------------------------
 # get_registry_tags
@@ -142,6 +168,22 @@ class TestGetRegistryTags:
 
         assert tags == set()
 
+    def test_upstream_only_skips_local_cache(self, tmp_path):
+        """upstream_only=True ignores a locally-cached file and fetches from GitHub."""
+        local_yaml = tmp_path / "quay.io" / "biocontainers" / "samtools" / "container.yaml"
+        local_yaml.parent.mkdir(parents=True)
+        stale_config = {"docker": URI, "tags": {"stale--tag_0": "sha256:000"}, "aliases": []}
+        local_yaml.write_text(yaml.dump(stale_config))
+
+        upstream_config = {**REMOTE_CONFIG}
+        with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+                   return_value=_curl_success(upstream_config)):
+            tags = get_registry_tags("samtools", local_registry=str(tmp_path),
+                                     upstream_only=True)
+
+        assert "stale--tag_0" not in tags
+        assert "1.21--h96c455f_1" in tags
+
 
 # ---------------------------------------------------------------------------
 # _ensure_local_registry_entry
@@ -164,21 +206,6 @@ class TestEnsureLocalRegistryEntry:
         saved = yaml.safe_load(registry_yaml.read_text())
         assert version in saved["tags"]
         assert saved["tags"][version] == "sha256:deadbeef"
-
-    def test_skips_write_when_version_already_registered(self, builder, tmp_path):
-        version = "1.21--h96c455f_1"
-        existing = {**REMOTE_CONFIG}  # already contains the version
-        registry_yaml = tmp_path / URI / "container.yaml"
-        registry_yaml.parent.mkdir(parents=True)
-        registry_yaml.write_text(yaml.dump(existing))
-
-        with patch.object(builder, "_compute_sha256") as mock_sha:
-            builder._ensure_local_registry_entry(
-                "samtools", version, "unused_path", URI,
-                local_registry=str(tmp_path),
-            )
-
-        mock_sha.assert_not_called()
 
     def test_creates_minimal_config_when_remote_unavailable(self, builder, tmp_path):
         version = "1.99--newbuild_0"
