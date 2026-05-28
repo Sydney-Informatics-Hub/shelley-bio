@@ -213,8 +213,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ```bash
-# 1. Clone both repos side by side
-git clone <shelley-bio-url> shelley-bio
+# 1. Clone both repos
+git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
 git clone https://github.com/Sydney-Informatics-Hub/guts.git
 
 # Change to the SIH dev branch that supports singularity
@@ -229,7 +229,10 @@ source .venv/bin/activate
 #    uv resolves the local ../guts path from pyproject.toml automatically
 uv pip install -e ".[dev]"
 
-# 4. Verify
+# 4. Load required modules
+module load singularity shpc
+
+# 5. Verify
 shelley-bio
 pytest --collect-only # check pytest is installed correctly, but do not run
 ```
