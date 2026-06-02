@@ -31,30 +31,158 @@ Each record is a YAML object. Key fields used by shelley-bio:
 | `homepage` | string \| null | Project homepage URL |
 | `license` | string \| null | SPDX identifier |
 
-Many fields are `null` for a significant portion of tools — the search logic
-guards against this throughout.
+Field coverage across 714 entries (measured 2026-06-02):
+
+| Field | Coverage | Notes |
+|---|---|---|
+| `id` | 100 % | Always present |
+| `name` | 100 % | Always present |
+| `description` | 72.5 % | ~27 % of tools lack descriptions |
+| `biotools` | 72.5 % | bio.tools cross-reference |
+| `edam-operations` | 69.7 % | Lower than RSEC bio.tools (91.6 %) |
+| `edam-topics` | 69.7 % | Lower than RSEC bio.tools (95.0 %) |
+| `homepage` | 78.7 % | |
+| `license` | 48.2 % | |
+| `biocontainers` | 16.9 % | Used for container lookup, not search |
+| `edam-inputs` | 22.5 % | |
+| `edam-outputs` | 19.6 % | |
+
+The search logic guards against `null` values throughout. EDAM coverage at
+~70 % is notably lower than the RSEC bio.tools corpus (~92–95 %), which is a
+key reason RSEC is the default search source.
+
+**Reproduce these numbers** (reads the committed file, no network required):
+
+```bash
+python3 shelley_bio/scripts/assess_coverage.py toolfinder
+```
 
 ### Research Software Ecosystem (RSEc)
 
 The [research-software-ecosystem/content](https://github.com/research-software-ecosystem/content)
-repository is a metadata commons aggregating bio.tools, BioContainers, Bioconda, and other
-sources. shelley-bio ingests **only the `*.biotools.json` files** (bio.tools schema) as the
-default corpus for `shelley-bio search`.
+repository aggregates bio.tools, BioContainers, Bioconda, Galaxy wrappers, Bioconductor,
+and other sources under one repo. Each tool gets its own directory under `data/` containing
+one JSON/YAML file per upstream source.
+
+#### Why bio.tools only?
+
+The corpus is restricted to `*.biotools.json` (the bio.tools schema). The table below
+summarises what each source type offers for *search* (numbers from the current master commit):
+
+| Source | Files | Entries | Description | EDAM ops / topics | Additive entries |
+|---|---|---|---|---|---|
+| `*.biotools.json` | 34,130 | 34,130 | 100 % | 92 % / 95 % | — (primary) |
+| `*.galaxy.json` | 503 | 503 | 98 % | 94 % / 93 % | ~0 (subset of bio.tools) |
+| `*.bioconductor.json` | 2,402 | 2,402 | 100 % | — (uses `biocViews`) | ~815 not in bio.tools |
+| `*.oeb.metrics.json` | 40,968 | 40,968 | — | — | performance metrics only |
+
+**Galaxy** wrappers are a strict subset of bio.tools in practice — they carry EDAM
+annotations because they pull from bio.tools, but there are only 503 of them and they
+add no new tools.
+
+**Bioconductor** is the only source that could meaningfully extend the corpus: ~815
+packages (34 % of 2,402) are not in bio.tools. They have 100 % description coverage and
+the `biocViews` controlled vocabulary (`RNASeq`, `SingleCell`, `DifferentialExpression`,
+etc.), but `biocViews` is not EDAM — it would need separate normalisation to search
+alongside EDAM fields without adding noise. This is tracked as future work.
+
+**OEB metrics** files contain benchmarking/performance measurements (not metadata), so
+they are not useful for search.
+
+The bio.tools-only decision keeps the MVP field schema uniform (EDAM everywhere) and
+avoids vocabulary-mixing noise. The 815 Bioconductor-only packages are the concrete gap
+to close in a future iteration.
 
 #### `rsec_meta.json.gz` — the search corpus
 
-Fields extracted per entry and their role:
+Field coverage measured over 34,130 bio.tools entries (RSEC commit `7ac28185`):
 
-| Field | Searched? | Notes |
-|---|---|---|
-| `name` | Yes | Verbatim tool name from bio.tools |
-| `description` | Yes | Free-text description |
-| `edam-operations` | Yes | Flattened from `function[].operation[].term` |
-| `edam-topics` | Yes | Flattened from `topic[].term` |
-| `edam-inputs` | No | Stored for future use; 12 % coverage, low signal |
-| `edam-outputs` | No | Stored for future use; 10 % coverage, low signal |
-| `homepage` | No | Project URL |
-| `license` | No | SPDX identifier |
+| Field | Searched? | Coverage | Notes |
+|---|---|---|---|
+| `name` | Yes | 100 % | Verbatim tool name |
+| `description` | Yes | 100 % | Free-text description |
+| `edam-operations` | Yes | 91.6 % | Flattened from `function[].operation[].term` |
+| `edam-topics` | Yes | 95.0 % | Flattened from `topic[].term` |
+| `license` | No | 45.1 % | SPDX identifier |
+| `edam-inputs` | No | 11.7 % | Too sparse and noisy without ranking |
+| `edam-outputs` | No | 9.7 % | Too sparse and noisy without ranking |
+| `homepage` | No | 100 % | Stored for display |
+
+`edam-inputs` and `edam-outputs` are stored in the artifact for future use but excluded
+from matching. Their coverage (10–12 %) is far lower than the plan's 47–53 % estimate —
+the actual numbers make the exclusion even more clearly correct.
+
+**Reproduce these numbers** (reads the committed artifact, no network required):
+
+```bash
+python3 shelley_bio/scripts/assess_coverage.py rsec
+```
+
+To re-assess against the latest upstream data (re-fetches the RSEC repo, ~90 s):
+
+```bash
+shelley-bio-build-rsec --assess
+```
+
+#### Per-tool field coverage — regression tool matrix
+
+The 15 tools from the `shelley-bio build` regression matrix were checked against
+both corpora to test whether low I/O coverage is a non-popular tool artefact:
+
+| Tool | In RSEC? | In TF? | ops | topics | inputs | outputs |
+|---|---|---|---|---|---|---|
+| fastqc | ✓ | ✓ | 3 | 3 | 5 | 2 |
+| multiqc | ✓ | ✓ | 2 | 4 | — | 7 |
+| salmon | ✓ | ✓ | 3 | 3 | 4 | 2 |
+| bcftools | ✓ | ✓ | 2 | 4 | 3 | 3 |
+| bwa-mem2 | ✓ | ✓ | 1 | 1 | 2 | — |
+| fastp | ✓ | ✓ | 2 | 2 | — | — |
+| sambamba | ✓ | ✓ | 2 | 3 | — | — |
+| samblaster | ✓ | — | 1 | 3 | — | — |
+| samtools | ✓ | ✓ | 7 | 4 | 4 | 4 |
+| blast | ✓ | ✓ | 2 | 2 | 2 | 9 |
+| star | ✓ | ✓ | 1 | 2 | 2 | 4 |
+| star-fusion | ✓ | ✓ | 1 | 2 | — | — |
+| seurat | ✓ | ✓ | — | 2 | — | — |
+| parabricks | — | — | — | — | — | — |
+| tidyverse | — | — | — | — | — | — |
+
+`—` in **In RSEC / In TF** = not in that corpus. `—` in field columns = field is empty
+for an entry that is present.
+
+**Finding: low I/O coverage is not a non-popular tool artefact.**
+
+Among the 13 tools found in RSEC, 7/13 (54 %) have some input annotation and 6/13
+(46 %) have some output annotation — noticeably higher than the full-corpus average
+(11.7 % / 9.7 %), confirming that well-known tools do get preferential curation.
+However, 6–7 of these 13 widely-used tools still lack I/O annotations entirely
+(fastp, sambamba, samblaster, star-fusion, seurat, and multiqc inputs). I/O coverage
+is therefore unreliable even for high-profile tools, and the decision to exclude I/O
+from search matching stands.
+
+Notable absences and gaps:
+
+- **parabricks** — NVIDIA proprietary GPU toolkit. Not in bio.tools or toolfinder;
+  search will never surface it. Users must `find`/`build` by exact name.
+- **tidyverse** — general-purpose R framework, not bioinformatics-specific. Absent
+  from both corpora under any key (`tidyverse`, `r-tidyverse`). The `r-` prefix is
+  a Bioconda package-name convention that bio.tools does not use.
+- **samblaster** — in RSEC but not toolfinder.
+- **seurat** — present in both corpora as `seurat` (not `r-seurat`; bio.tools uses
+  the tool name, not the Bioconda package name). Has no operations and no I/O; only
+  topics (`RNA-Seq`, `Transcriptomics`) are populated. Matches queries like "single
+  cell" only if the description carries the tokens.
+- **bwa-mem2** — inputs annotated (2 terms) but outputs absent in bio.tools.
+- **multiqc** — outputs well-annotated (7 terms) but inputs deliberately absent,
+  since MultiQC aggregates arbitrary tool output files.
+- **star-fusion** — present in toolfinder as `star_fusion` (underscore). The
+  reproduce script handles this variant automatically.
+
+**Reproduce the per-tool lookup** (reads committed artifacts, no network required):
+
+```bash
+python3 shelley_bio/scripts/assess_regression_tools.py
+```
 
 Top-level artifact structure:
 
@@ -63,8 +191,8 @@ Top-level artifact structure:
   "generated_at": "2026-06-02T...",
   "source": "https://github.com/research-software-ecosystem/content",
   "source_ref": "master",
-  "source_commit": "<sha>",
-  "entry_count": 28000,
+  "source_commit": "7ac28185...",
+  "entry_count": 34130,
   "field_coverage": {
     "name": 100.0, "description": 100.0, "homepage": 100.0,
     "license": 45.1, "edam-operations": 91.6, "edam-topics": 95.0,
@@ -89,7 +217,7 @@ The artifact is built by a committed, re-runnable script. Run from the repo root
 the virtual environment active:
 
 ```bash
-# Preferred: shallow sparse-clone of data/ only (~30–50 MB transferred)
+# Preferred: shallow sparse-clone of data/ only (~1.2 GB on disk, ~90 s)
 shelley-bio-build-rsec
 
 # Or equivalently via python -m:
