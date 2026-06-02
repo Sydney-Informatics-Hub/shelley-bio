@@ -1,32 +1,24 @@
-# 🐢> Shelley Bio
+# Shelley Bio
 
-**A bioinformatics tool finder and module builder for CVMFS-hosted containers on the (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage)**
+**A bioinformatics tool finder and module builder for CVMFS-hosted containers on [BioShell](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
-Shelley-bio helps researchers using (to be renamed) [bioimage](https://github.com/Sydney-Informatics-Hub/bioimage) virtual machine image on Nirin and Nectar research cloud platforms. They can use `shelley-bio` to discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
+Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
 ## Features
 
-- **Tool Discovery**: Search for bioinformatics tools by name or function
+- **Tool Discovery**: Find bioinformatics tools by name or browse the full catalog
 - **Container Management**: Query available container versions from CVMFS
 - **Module Building**: Automatically generate Lmod modules for tools
 - **Interactive CLI**: User-friendly command-line interface
-- **Batch Operations**: Build multiple modules simultaneously
 - **MCP Integration**: Model Context Protocol server for AI assistants
 
 ## Quick Start
 
 ### Installation
 
-`shelley-bio` is installed as part of the [BioShell](https://github.com/AustralianBioCommons/BioShell). 
+`shelley-bio` is installed as part of [BioShell](https://github.com/AustralianBioCommons/BioShell).
 
-```bash
-# Clone the repository
-git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
-cd shelley-bio
-
-# Install dependencies
-pip install -r requirements.txt
-```
+For development instructions, see [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md).
 
 ### Basic Usage
 
@@ -34,7 +26,7 @@ pip install -r requirements.txt
 # Find a specific tool
 shelley-bio find fastqc
 
-# Search by function
+# Search by function (in development)
 shelley-bio search "quality control"
 
 # List available versions
@@ -50,21 +42,20 @@ shelley-bio build samtools/1.21
 shelley-bio interactive
 ```
 
-### Batch Operations
-
-```bash
-# Build multiple modules at once
-shelley-bio-batch samtools fastqc bowtie2
-
-# Build specific versions
-shelley-bio-batch samtools/1.21 fastqc/0.12.1
-```
-
 ## Documentation
 
-- [Command Reference](docs/COMMAND_REFERENCE.md) - Complete CLI documentation
-- [Developer Reference](docs/DEVELOPER_REFERENCE.md) - API and development guide
-- [Query Guide](docs/HOW_TO_QUERY.md) - Advanced search techniques
+| Type | File | What it covers |
+|---|---|---|
+| Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
+| How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions, list |
+| How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
+| How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
+| How-to | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) | Dev environment and tests |
+| Reference | [docs/reference/cli.md](docs/reference/cli.md) | All CLI commands |
+| Reference | [docs/reference/mcp.md](docs/reference/mcp.md) | MCP tool schemas and resources |
+| Reference | [docs/reference/data-sources.md](docs/reference/data-sources.md) | Data artifacts and schemas |
+| Explanation | [docs/explanation/search-design.md](docs/explanation/search-design.md) | Why the search is designed this way |
+| Explanation | [docs/explanation/build-design.md](docs/explanation/build-design.md) | Why the build is designed this way |
 
 ## Architecture
 
@@ -76,31 +67,12 @@ shelley_bio/
 ├── server/          # MCP server for AI integration
 ├── builder/         # CVMFS module building functionality
 ├── scripts/         # Batch operations and utilities
-└── utils.py         # Shared utilities and constants
+└── utils/           # Shared utilities and constants
 ```
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10+
 - Access to CVMFS repositories (typically `/cvmfs/singularity.galaxyproject.org/`)
 - Lmod (for module management)
 - Singularity/Apptainer (for container execution)
-
-## TODO Migration from [bio-finder](https://github.com/Sydney-Informatics-Hub/bio-finder)
-
-This is a migration from the original [bio-finder](https://github.com/Sydney-Informatics-Hub/bio-finder) codebase, the core functionality remains the same with these improvements:
-
-- **Professional packaging**: Installable via pip
-- **Improved CLI**: Better user experience and error handling  
-- **Modular design**: Clean separation of concerns
-- **Enhanced documentation**: Comprehensive guides and references
-- **Batch operations**: Efficient multi-tool module building
-
-### Command Changes
-| bio-finder | shelley-bio |
-|------------|-------------|
-| `./biofinder find fastqc` | `shelley-bio find fastqc` |
-| `./biofinder build samtools` | `shelley-bio build samtools` |
-| `./build-modules.sh tool1 tool2` | `shelley-bio-batch tool1 tool2` |
-
-
