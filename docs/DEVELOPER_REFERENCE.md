@@ -34,6 +34,97 @@ Each record is a YAML object. Key fields used by shelley-bio:
 Many fields are `null` for a significant portion of tools — the search logic
 guards against this throughout.
 
+### Research Software Ecosystem (RSEc)
+
+The [research-software-ecosystem/content](https://github.com/research-software-ecosystem/content)
+repository is a metadata commons aggregating bio.tools, BioContainers, Bioconda, and other
+sources. shelley-bio ingests **only the `*.biotools.json` files** (bio.tools schema) as the
+default corpus for `shelley-bio search`.
+
+#### `rsec_meta.json.gz` — the search corpus
+
+Fields extracted per entry and their role:
+
+| Field | Searched? | Notes |
+|---|---|---|
+| `name` | Yes | Verbatim tool name from bio.tools |
+| `description` | Yes | Free-text description |
+| `edam-operations` | Yes | Flattened from `function[].operation[].term` |
+| `edam-topics` | Yes | Flattened from `topic[].term` |
+| `edam-inputs` | No | Stored for future use; 12 % coverage, low signal |
+| `edam-outputs` | No | Stored for future use; 10 % coverage, low signal |
+| `homepage` | No | Project URL |
+| `license` | No | SPDX identifier |
+
+Top-level artifact structure:
+
+```json
+{
+  "generated_at": "2026-06-02T...",
+  "source": "https://github.com/research-software-ecosystem/content",
+  "source_ref": "master",
+  "source_commit": "<sha>",
+  "entry_count": 28000,
+  "field_coverage": {
+    "name": 100.0, "description": 100.0, "homepage": 100.0,
+    "license": 45.1, "edam-operations": 91.6, "edam-topics": 95.0,
+    "edam-inputs": 11.7, "edam-outputs": 9.7
+  },
+  "entries": [
+    {
+      "id": "bwa", "name": "BWA", "biotools_id": "bwa",
+      "description": "...", "homepage": "...", "license": "GPL-3.0",
+      "edam-operations": ["Read mapping", "Sequence alignment"],
+      "edam-topics": ["Genomics", "Mapping"],
+      "edam-inputs": ["Nucleic acid sequence", "FASTQ"],
+      "edam-outputs": ["Sequence alignment map", "SAM"]
+    }
+  ]
+}
+```
+
+#### Generating the artifact
+
+The artifact is built by a committed, re-runnable script. Run from the repo root with
+the virtual environment active:
+
+```bash
+# Preferred: shallow sparse-clone of data/ only (~30–50 MB transferred)
+shelley-bio-build-rsec
+
+# Or equivalently via python -m:
+python -m shelley_bio.scripts.build_rsec_meta
+```
+
+The script sparse-clones `data/` from the RSEC content repo (falling back to a full
+tarball download if git partial-clone is unavailable), parses every `*.biotools.json`
+file, deduplicates by `biotoolsID`, and writes `shelley_bio/data/rsec_meta.json.gz`.
+
+**Assessment mode** — print field-coverage statistics without writing anything:
+
+```bash
+shelley-bio-build-rsec --assess
+```
+
+**All options:**
+
+| Option | Default | Purpose |
+|---|---|---|
+| `--assess` | off | Print field-coverage report and exit |
+| `--method` | `sparse-clone` | `sparse-clone` or `tarball` |
+| `--ref` | `master` | Branch/tag to fetch |
+| `--out` | `shelley_bio/data/rsec_meta.json.gz` | Output path |
+| `--workdir` | auto (temp) | Persistent work directory for debugging |
+| `-v` | off | Debug logging |
+
+**Regenerate and commit after upstream updates:**
+
+```bash
+shelley-bio-build-rsec
+git add shelley_bio/data/rsec_meta.json.gz
+git commit -m "DEV: Regenerate rsec_meta.json.gz from RSEC content"
+```
+
 ### `galaxy_singularity_cache.json.gz`
 
 A cache is used to enable fast look ups for `shelley-bio` read-only functions (`find`, `search`, `versions`). To generate the cache, run:
