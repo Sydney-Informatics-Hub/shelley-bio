@@ -111,9 +111,9 @@ shelley-bio-build-rsec --assess
 
 ### Per-tool field coverage — regression tools
 
-Cross-reference of the regression tool matrix against both corpora (`—` = absent or empty):
+Cross-reference of the regression tool matrix against both corpora. Numbers are counts of EDAM terms populated in the RSEC bio.tools entry. `—` = tool absent from that corpus, or field empty.
 
-| Tool | In RSEC? | In TF? | ops | topics | inputs | outputs |
+| Tool | In RSEC? | In TF? | edam-operations | edam-topics | edam-inputs | edam-outputs |
 |---|---|---|---|---|---|---|
 | fastqc | ✓ | ✓ | 3 | 3 | 5 | 2 |
 | multiqc | ✓ | ✓ | 2 | 4 | — | 7 |

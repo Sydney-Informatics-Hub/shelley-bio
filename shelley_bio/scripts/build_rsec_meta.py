@@ -34,9 +34,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from shelley_bio.utils.globals import DATA_DIR
+
 log = logging.getLogger("build-rsec-meta")
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DEFAULT_OUT = DATA_DIR / "rsec_meta.json.gz"
 REPO_URL = "https://github.com/research-software-ecosystem/content"
 DEFAULT_REF = "master"

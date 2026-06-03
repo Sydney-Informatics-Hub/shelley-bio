@@ -23,6 +23,7 @@ from difflib import get_close_matches
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from shelley_bio.utils.constants import STOP_WORDS
+from shelley_bio.utils.globals import DATA_DIR
 from shelley_bio.utils.style import console, ShelleyStyle, print_error
 from shelley_bio.builder.cvmfs_builder import get_registry_tags
 
@@ -36,7 +37,6 @@ from mcp.types import (Resource, Tool, TextContent)
 import mcp.server.stdio
 
 # Data paths
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 METADATA_FILE = DATA_DIR / "toolfinder_meta.yaml"
 SINGULARITY_CACHE_FILE = DATA_DIR / "galaxy_singularity_cache.json.gz"
 
