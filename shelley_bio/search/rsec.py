@@ -73,5 +73,34 @@ class RsecSource(MetadataSource):
         #      d. if query_tokens ∩ entry_tokens is non-empty → entry matches
         # 5. collect matched tool names (deduplicated, preserving first occurrence)
         # 6. sort alphabetically, then return names[:limit]
-        pass
         """
+        raw_tokens = self._normalise(query)
+
+        stopwords = self._load_stopwords()
+        filtered = [t for t in raw_tokens if t not in stopwords]
+        tokens = filtered if filtered else raw_tokens
+
+        query_tokens = self._expand_tokens(tokens)
+        if not query_tokens:
+            return []
+
+        names: list[str] = []
+        seen: set[str] = set()
+        for entry in self.entries:
+            text_parts = [
+                str(entry.get("name") or ""),
+                str(entry.get("description") or ""),
+            ]
+            for field in ("edam-operations", "edam-topics"):
+                text_parts.extend(self._flatten_edam(entry.get(field)))
+
+            entry_tokens = self._expand_tokens(self._normalise(" ".join(text_parts)))
+
+            if query_tokens & entry_tokens:
+                name = str(entry.get("name") or entry.get("id") or "")
+                if name and name not in seen:
+                    names.append(name)
+                    seen.add(name)
+
+        names.sort()
+        return names[:limit] if limit is not None else names

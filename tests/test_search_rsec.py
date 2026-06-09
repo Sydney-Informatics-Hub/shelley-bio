@@ -102,17 +102,47 @@ def test_len_empty():
 
 
 # ---------------------------------------------------------------------------
-# search() — stub
+# search()
 # ---------------------------------------------------------------------------
 
-def test_search_is_stub():
+def test_search_returns_list():
     source = RsecSource()
     source.entries = ENTRIES
-    # search() is a placeholder; the body is pass, so it returns None
-    assert source.search("quality") is None
+    assert isinstance(source.search("quality"), list)
 
 
-def test_search_stub_does_not_raise():
+def test_search_match_by_description():
     source = RsecSource()
     source.entries = ENTRIES
-    source.search("variant calling", limit=5)  # must not raise
+    assert "FastQC" in source.search("quality")
+
+
+def test_search_match_by_edam():
+    source = RsecSource()
+    source.entries = ENTRIES
+    assert "FastQC" in source.search("sequencing")
+
+
+def test_search_no_match():
+    source = RsecSource()
+    source.entries = ENTRIES
+    assert source.search("cryogenic") == []
+
+
+def test_search_limit():
+    source = RsecSource()
+    source.entries = ENTRIES
+    assert len(source.search("sequencing", limit=1)) == 1
+
+
+def test_search_sorted():
+    source = RsecSource()
+    source.entries = ENTRIES
+    result = source.search("alignment")
+    assert result == sorted(result)
+
+
+def test_search_case_insensitive():
+    source = RsecSource()
+    source.entries = ENTRIES
+    assert "FastQC" in source.search("QUALITY")
