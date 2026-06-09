@@ -18,6 +18,7 @@ from rich.box import ROUNDED
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from shelley_bio.utils.globals import LMOD_MODULES_PATH
+from shelley_bio.search.rsec import RsecSource
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..utils.style import (
@@ -136,6 +137,53 @@ def _render_find_tool(payload: dict) -> None:
         ))
 
 
+def _render_search_results(query: str, names: list[str]) -> None:
+    """Render RsecSource search results using Rich components."""
+    if not names:
+        console.print(ShelleyStyle.create_error_panel(
+            "No Results",
+            f"No tools matched '{query}'.",
+            "Try broader terms — e.g. 'alignment' instead of 'short-read alignment'",
+        ))
+        return
+
+    count = len(names)
+    suffix = "es" if count != 1 else ""
+    table = Table(
+        title=f"[header]Results for '[tool]{query}[/tool]' ({count} match{suffix})[/header]",
+        box=ROUNDED,
+        border_style="primary",
+        header_style="table.header",
+        show_lines=False,
+    )
+    table.add_column("Tool", style="tool", no_wrap=True)
+    table.add_column("", style="command", no_wrap=True)
+    for name in names:
+        table.add_row(name, f"shelley-bio find {name}")
+
+    console.print(table)
+    console.print(
+        "[muted]Source: RSEC bio.tools · use [command]shelley-bio find <name>[/command] for details[/muted]"
+    )
+
+
+def search_tools(query: str, limit: int = 10) -> None:
+    """Search the RSEC corpus directly (no MCP server needed)."""
+    with ShelleyStyle.create_status(f"Searching for: {query}") as status:
+        try:
+            source = RsecSource().load()
+        except FileNotFoundError:
+            console.print(ShelleyStyle.create_error_panel(
+                "Corpus Not Found",
+                "rsec_meta.json.gz is missing.",
+                "Run: shelley-bio-build-rsec",
+            ))
+            return
+        names = source.search(query, limit=limit)
+
+    _render_search_results(query, names)
+
+
 async def query_tool(session: ClientSession, tool_name: str):
     """Query for a specific tool."""
     with ShelleyStyle.create_status(f"Searching for tool: {tool_name}") as status:
@@ -148,19 +196,6 @@ async def query_tool(session: ClientSession, tool_name: str):
                 _render_find_tool(payload)
             except json.JSONDecodeError:
                 console.print(content.text)
-
-
-async def search_function(session: ClientSession, description: str, limit: int = 10):
-    """Search by function/description."""
-    with ShelleyStyle.create_status(f"Searching for: {description}") as status:
-        result = await session.call_tool(
-            "search_by_function",
-            {"description": description, "limit": limit}
-        )
-    
-    for content in result.content:
-        if hasattr(content, 'text'):
-            console.print(content.text)
 
 
 async def list_tools(session: ClientSession, limit: int = 50):
@@ -352,7 +387,7 @@ async def interactive_mode(session: ClientSession):
                 
             elif command == "search" and len(parts) > 1:
                 description = " ".join(parts[1:])
-                await search_function(session, description)
+                search_tools(description)
                 
             elif command == "search":
                 print_warning("Missing search terms")
@@ -424,11 +459,7 @@ async def _async_main() -> None:
                 
                 if command == "find" and len(sys.argv) > 2:
                     await query_tool(session, sys.argv[2])
-                
-                elif command == "search" and len(sys.argv) > 2:
-                    description = " ".join(sys.argv[2:])
-                    await search_function(session, description)
-                
+
                 elif command == "versions" and len(sys.argv) > 2:
                     await get_versions(session, sys.argv[2])
                 
@@ -482,6 +513,11 @@ def main() -> None:
 
     if command == "build" and len(sys.argv) > 2:
         sys.exit(0 if build_module(sys.argv[2]) else 1)
+
+    if command == "search" and len(sys.argv) > 2:
+        query = " ".join(sys.argv[2:])
+        search_tools(query)
+        sys.exit(0)
 
     asyncio.run(_async_main())
 
