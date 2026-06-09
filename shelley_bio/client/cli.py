@@ -6,6 +6,7 @@ Command-line client for querying the CVMFS-MCP server and building modules.
 """
 
 import asyncio
+import gzip
 import sys
 import json
 import re
@@ -17,7 +18,7 @@ from rich.box import ROUNDED
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from shelley_bio.utils.globals import LMOD_MODULES_PATH
+from shelley_bio.utils.globals import LMOD_MODULES_PATH, DATA_DIR
 from shelley_bio.search.rsec import RsecSource
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
@@ -137,7 +138,22 @@ def _render_find_tool(payload: dict) -> None:
         ))
 
 
-def _render_search_results(query: str, names: list[str]) -> None:
+def _load_cvmfs_tool_ids() -> set[str] | None:
+    """
+    Return normalized tool IDs from the CVMFS container cache, or None if unavailable.
+
+    Both sides of the match are normalized to lowercase + hyphens→underscores, so
+    'bwa-mem2' and 'bwa_mem2' resolve to the same key.
+    """
+    cache_path = DATA_DIR / "galaxy_singularity_cache.json.gz"
+    if not cache_path.exists():
+        return None
+    with gzip.open(cache_path, "rt", encoding="utf-8") as f:
+        data = json.load(f)
+    return {entry["tool_name"].lower().replace("-", "_") for entry in data["entries"]}
+
+
+def _render_search_results(query: str, names: list[str], cvmfs_filtered: bool = False) -> None:
     """Render RsecSource search results using Rich components."""
     if not names:
         console.print(ShelleyStyle.create_error_panel(
@@ -162,9 +178,14 @@ def _render_search_results(query: str, names: list[str]) -> None:
         table.add_row(name, f"shelley-bio find {name}")
 
     console.print(table)
-    console.print(
-        "[muted]Source: RSEC bio.tools · use [command]shelley-bio find <name>[/command] for details[/muted]"
-    )
+    if cvmfs_filtered:
+        console.print(
+            "[muted]Source: RSEC bio.tools (CVMFS-available tools) · use [command]shelley-bio find <name>[/command] for details[/muted]"
+        )
+    else:
+        console.print(
+            "[muted]Source: RSEC bio.tools · use [command]shelley-bio find <name>[/command] for details[/muted]"
+        )
 
 
 def search_tools(query: str, limit: int = 10) -> None:
@@ -179,9 +200,17 @@ def search_tools(query: str, limit: int = 10) -> None:
                 "Run: shelley-bio-build-rsec",
             ))
             return
+
+        cvmfs_ids = _load_cvmfs_tool_ids()
+        if cvmfs_ids is not None:
+            source.entries = [
+                e for e in source.entries
+                if e.get("id", "").lower().replace("-", "_") in cvmfs_ids
+            ]
+
         names = source.search(query, limit=limit)
 
-    _render_search_results(query, names)
+    _render_search_results(query, names, cvmfs_filtered=cvmfs_ids is not None)
 
 
 async def query_tool(session: ClientSession, tool_name: str):
