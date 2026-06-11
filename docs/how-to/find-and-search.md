@@ -22,6 +22,8 @@ shelley-bio find bwa-mem2      # hyphens and underscores handled automatically
 
 If no exact match is found, shelley-bio suggests close alternatives.
 
+> **Note:** `find` is case-sensitive. `shelley-bio find Arriba` and `shelley-bio find arriba` may return different results — use the tool's canonical casing (usually lowercase) if you don't get a match.
+
 ## Search by function — `search`
 
 Use `search` when you know what you want to do but not which tool does it.
@@ -33,33 +35,31 @@ shelley-bio search "genome assembly"
 shelley-bio search "adapter trimming"
 ```
 
-**Returns:** A list of matching tools sorted alphabetically, each with a description and latest container version.
-
-> **Note:** Search is under active development — corpus and ranking improvements are coming.
+**Returns:** A list of matching tool names sorted alphabetically, each with a `shelley-bio find <name>` command to get full details. Results are filtered to tools that have a container available on CVMFS, so every result can be installed directly with `shelley-bio build`.
 
 ### Tips for better results
 
-Shorter technical terms work better than full sentences:
+The search is OR-based: **more words → more results, not fewer.** Each additional word is another independent match condition. Use the fewest, most domain-specific terms you know:
 
-| Less effective | More effective |
+| Avoid | Better |
 |---|---|
-| `"check if my fastq data is good"` | `"fastq quality control"` |
-| `"find where mutations are"` | `"variant calling"` |
-| `"build a genome from scratch"` | `"de novo assembly"` |
-| `"line up reads to a reference"` | `"read mapping"` |
+| `"check if my fastq data is good"` | `"quality control"` |
+| `"tool that finds where mutations are"` | `"variant calling"` |
+| `"assembling a genome from scratch"` | `"de novo assembly"` |
+| `"RNA-seq analysis"` | `"RNA-seq"` |
 
-Combine terms to narrow results:
+If you get too many results, **remove words rather than adding them.** A single specific technical term (e.g., `"nanopore"`) returns far fewer results than a phrase (`"nanopore sequencing analysis"`).
 
-```bash
-shelley-bio search "splice-aware alignment"
-shelley-bio search "single cell clustering"
-```
+Note that hyphens are expanded during tokenisation — `"chip-seq"` matches any tool containing *chip*, *seq*, or *chipseq*, while `"chipseq"` matches only the compound form.
 
 ### Known limitations
 
-- **Keyword-based, not semantic.** The query `"how do I QC my reads?"` will not match a tool described as _"quality control for sequencing data"_ — use `"quality control"` instead.
+- **Returns many results for broad queries.** "OR-based" means any token can match, not all — the opposite of how a Google search works. `"quality control"` matches every tool that mentions either *quality* or *control* anywhere in its metadata, not only tools where both appear together. The current result set is large and unsorted by relevance.
+- **No relevance ranking.** Results are sorted alphabetically, not by how well they match. The best tool for your task may be anywhere in the list.
+- **Keyword-based, not semantic.** `"how do I QC my reads?"` will not match a tool described as _"quality control for sequencing data"_ — exact technical terms are required.
 - **Metadata is incomplete for some tools.** If `find` returns no description, check the tool's homepage directly or try `search` with related terms.
-- **Container availability does not equal tool availability.** A tool can appear in the metadata without a container on CVMFS (it will show a warning). The tool may still be usable via a module system or conda.
+
+For the design rationale behind these limitations, see [docs/explanation/search-design.md](../explanation/search-design.md).
 
 ## List all versions — `versions`
 
