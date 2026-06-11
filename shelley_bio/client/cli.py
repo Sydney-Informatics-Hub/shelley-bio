@@ -7,10 +7,13 @@ Command-line client for querying the CVMFS-MCP server and building modules.
 
 import asyncio
 import gzip
+import math
 import sys
 import json
 import re
 from pathlib import Path
+
+import questionary
 
 from rich.panel import Panel
 from rich.table import Table
@@ -153,20 +156,79 @@ def _load_cvmfs_tool_ids() -> set[str] | None:
     return {entry["tool_name"].lower().replace("-", "_") for entry in data["entries"]}
 
 
-def _render_search_results(query: str, names: list[str], cvmfs_filtered: bool = False) -> None:
-    """Render RsecSource search results using Rich components."""
-    if not names:
-        console.print(ShelleyStyle.create_error_panel(
-            "No Results",
-            f"No tools matched '{query}'.",
-            "Try broader terms — e.g. 'alignment' instead of 'short-read alignment'",
-        ))
-        return
+def _load_versions_from_cache(tool_name: str) -> list[tuple[str, str]] | None:
+    """
+    Return (tag, path) pairs for tool_name from the CVMFS cache, sorted newest-first.
+    Returns None if the cache file is missing; returns [] if the tool has no entries.
+    """
+    cache_path = DATA_DIR / "galaxy_singularity_cache.json.gz"
+    if not cache_path.exists():
+        return None
+    with gzip.open(cache_path, "rt", encoding="utf-8") as f:
+        data = json.load(f)
 
-    count = len(names)
+    tool_lower = tool_name.lower()
+    variations = {tool_lower, tool_lower.replace("-", "_"), tool_lower.replace("_", "-")}
+    entries = [e for e in data["entries"] if e["tool_name"].lower() in variations]
+
+    def _ver_key(e: dict) -> tuple:
+        m = re.match(r"^(\d+(?:\.\d+)*)", e["tag"])
+        if m:
+            return tuple(int(x) for x in m.group(1).split("."))
+        return (0,)
+
+    entries.sort(key=_ver_key, reverse=True)
+    return [(e["tag"], e["path"]) for e in entries]
+
+
+def _paginate(items: list, render_fn, page_size: int = 10) -> None:
+    """
+    Render items in pages of page_size, using questionary.select() for navigation.
+
+    render_fn(page_items, page, total_pages, total) is called once per page.
+    Navigation is skipped when all items fit on a single page.
+    """
+    total = len(items)
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    page = 0
+
+    while True:
+        start = page * page_size
+        render_fn(items[start : start + page_size], page, total_pages, total)
+
+        if total_pages <= 1:
+            break
+
+        choices = []
+        if page < total_pages - 1:
+            choices.append(questionary.Choice("Next →", value="next"))
+        if page > 0:
+            choices.append(questionary.Choice("← Previous", value="prev"))
+        choices.append(questionary.Choice("Exit", value="quit"))
+
+        action = questionary.select("", choices=choices).ask()
+        if action is None or action == "quit":
+            break
+        elif action == "next":
+            page += 1
+        elif action == "prev":
+            page -= 1
+
+
+def _render_search_page(
+    names: list[str],
+    page: int,
+    total_pages: int,
+    total: int,
+    query: str,
+    cvmfs_filtered: bool = False,
+) -> None:
+    """Render one page of search results."""
+    count = total
     suffix = "es" if count != 1 else ""
+    page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
     table = Table(
-        title=f"[header]Results for '[tool]{query}[/tool]' ({count} match{suffix})[/header]",
+        title=f"[header]Results for '[tool]{query}[/tool]' ({count} match{suffix}){page_info}[/header]",
         box=ROUNDED,
         border_style="primary",
         header_style="table.header",
@@ -188,7 +250,7 @@ def _render_search_results(query: str, names: list[str], cvmfs_filtered: bool = 
         )
 
 
-def search_tools(query: str, limit: int = 10) -> None:
+def search_tools(query: str) -> None:
     """Search the RSEC corpus directly (no MCP server needed)."""
     with ShelleyStyle.create_status(f"Searching for: {query}") as status:
         try:
@@ -208,9 +270,75 @@ def search_tools(query: str, limit: int = 10) -> None:
                 if e.get("id", "").lower().replace("-", "_") in cvmfs_ids
             ]
 
-        names = source.search(query, limit=limit)
+        names = source.search(query)
 
-    _render_search_results(query, names, cvmfs_filtered=cvmfs_ids is not None)
+    if not names:
+        console.print(ShelleyStyle.create_error_panel(
+            "No Results",
+            f"No tools matched '{query}'.",
+            "Try broader terms — e.g. 'alignment' instead of 'short-read alignment'",
+        ))
+        return
+
+    _paginate(
+        names,
+        lambda page_items, page, total_pages, total: _render_search_page(
+            page_items, page, total_pages, total, query,
+            cvmfs_filtered=(cvmfs_ids is not None),
+        ),
+    )
+
+
+def _render_versions_page(
+    pairs: list[tuple[str, str]],
+    page: int,
+    total_pages: int,
+    total: int,
+    tool_name: str,
+) -> None:
+    """Render one page of versions with CVMFS paths."""
+    page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
+    table = Table(
+        title=f"[header]Available Versions for [tool]{tool_name}[/tool] ({total} total){page_info}[/header]",
+        box=ROUNDED,
+        border_style="primary",
+        header_style="table.header",
+        show_lines=False,
+    )
+    table.add_column("Version", style="version", no_wrap=True)
+    table.add_column("Container Path", style="accent")
+    for version, path in pairs:
+        table.add_row(version, path)
+    console.print(table)
+
+
+def versions_sync(tool_name: str) -> None:
+    """List all container versions for a tool from the CVMFS cache (no MCP server needed)."""
+    with ShelleyStyle.create_status(f"Loading versions for: {tool_name}") as status:
+        pairs = _load_versions_from_cache(tool_name)
+
+    if pairs is None:
+        console.print(ShelleyStyle.create_error_panel(
+            "Cache Not Found",
+            "galaxy_singularity_cache.json.gz is missing.",
+            "Run: shelley-bio-build-cache",
+        ))
+        return
+
+    if not pairs:
+        console.print(ShelleyStyle.create_error_panel(
+            "No Versions Found",
+            f"No containers found for '{tool_name}'.",
+            "Check the tool name spelling or try: shelley-bio find " + tool_name,
+        ))
+        return
+
+    _paginate(
+        pairs,
+        lambda page_items, page, total_pages, total: _render_versions_page(
+            page_items, page, total_pages, total, tool_name,
+        ),
+    )
 
 
 async def query_tool(session: ClientSession, tool_name: str):
@@ -234,16 +362,6 @@ async def list_tools(session: ClientSession, limit: int = 50):
             "list_available_tools",
             {"limit": limit}
         )
-    
-    for content in result.content:
-        if hasattr(content, 'text'):
-            console.print(content.text)
-
-
-async def get_versions(session: ClientSession, tool_name: str):
-    """Get available versions of a tool."""
-    with ShelleyStyle.create_status(f"Getting versions for: {tool_name}") as status:
-        result = await session.call_tool("get_container_versions", {"tool_name": tool_name})
     
     for content in result.content:
         if hasattr(content, 'text'):
@@ -424,8 +542,8 @@ async def interactive_mode(session: ClientSession):
                 print_info("Example: [command]search quality control[/command]")
                 
             elif command == "versions" and len(parts) > 1:
-                await get_versions(session, parts[1])
-                
+                versions_sync(parts[1])
+
             elif command == "versions":
                 print_warning("Missing tool name")
                 print_info("Usage: [command]versions <tool_name>[/command]")
@@ -489,9 +607,6 @@ async def _async_main() -> None:
                 if command == "find" and len(sys.argv) > 2:
                     await query_tool(session, sys.argv[2])
 
-                elif command == "versions" and len(sys.argv) > 2:
-                    await get_versions(session, sys.argv[2])
-                
                 elif command == "interactive":
                     await interactive_mode(session)
                 
@@ -546,6 +661,10 @@ def main() -> None:
     if command == "search" and len(sys.argv) > 2:
         query = " ".join(sys.argv[2:])
         search_tools(query)
+        sys.exit(0)
+
+    if command == "versions" and len(sys.argv) > 2:
+        versions_sync(sys.argv[2])
         sys.exit(0)
 
     asyncio.run(_async_main())
