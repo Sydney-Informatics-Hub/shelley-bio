@@ -534,15 +534,17 @@ async def interactive_mode(session: ClientSession):
                 
             elif command == "search" and len(parts) > 1:
                 description = " ".join(parts[1:])
-                search_tools(description)
-                
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, search_tools, description)
+
             elif command == "search":
                 print_warning("Missing search terms")
                 print_info("Usage: [command]search <description>[/command]")
                 print_info("Example: [command]search quality control[/command]")
-                
+
             elif command == "versions" and len(parts) > 1:
-                versions_sync(parts[1])
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, versions_sync, parts[1])
 
             elif command == "versions":
                 print_warning("Missing tool name")
