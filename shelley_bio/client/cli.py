@@ -215,8 +215,12 @@ def _paginate(items: list, render_fn, page_size: int = 10) -> None:
             page -= 1
 
 
+def _truncate(text: str, max_len: int = 60) -> str:
+    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+
+
 def _render_search_page(
-    names: list[str],
+    results: list[tuple[str, str]],
     page: int,
     total_pages: int,
     total: int,
@@ -235,19 +239,16 @@ def _render_search_page(
         show_lines=False,
     )
     table.add_column("Tool", style="tool", no_wrap=True)
-    table.add_column("", style="command", no_wrap=True)
-    for name in names:
-        table.add_row(name, f"shelley-bio find {name}")
+    table.add_column("Description", style="muted")
+    for name, desc in results:
+        table.add_row(name, _truncate(desc))
 
     console.print(table)
-    if cvmfs_filtered:
-        console.print(
-            "[muted]Source: RSEC bio.tools (CVMFS-available tools) · use [command]shelley-bio find <name>[/command] for details[/muted]"
-        )
-    else:
-        console.print(
-            "[muted]Source: RSEC bio.tools · use [command]shelley-bio find <name>[/command] for details[/muted]"
-        )
+    source_note = "RSEC bio.tools (CVMFS-available tools)" if cvmfs_filtered else "RSEC bio.tools"
+    console.print(
+        f"[muted]For more information about a specific tool, use [command]shelley-bio find <name>[/command]"
+        f" · Source: {source_note}[/muted]"
+    )
 
 
 def search_tools(query: str) -> None:
@@ -280,13 +281,17 @@ def search_tools(query: str) -> None:
         ))
         return
 
-    _paginate(
-        names,
-        lambda page_items, page, total_pages, total: _render_search_page(
-            page_items, page, total_pages, total, query,
-            cvmfs_filtered=(cvmfs_ids is not None),
-        ),
-    )
+    desc_for = {
+        str(e.get("name") or e.get("id") or ""): str(e.get("description") or "")
+        for e in source.entries
+    }
+    results = [(name, desc_for.get(name, "")) for name in names]
+
+    def render_page(page_items, page, total_pages, total):
+        _render_search_page(page_items, page, total_pages, total, query,
+                            cvmfs_filtered=(cvmfs_ids is not None))
+
+    _paginate(results, render_page)
 
 
 def _render_versions_page(
@@ -333,12 +338,10 @@ def versions_sync(tool_name: str) -> None:
         ))
         return
 
-    _paginate(
-        pairs,
-        lambda page_items, page, total_pages, total: _render_versions_page(
-            page_items, page, total_pages, total, tool_name,
-        ),
-    )
+    def render_page(page_items, page, total_pages, total):
+        _render_versions_page(page_items, page, total_pages, total, tool_name)
+
+    _paginate(pairs, render_page)
 
 
 async def query_tool(session: ClientSession, tool_name: str):
