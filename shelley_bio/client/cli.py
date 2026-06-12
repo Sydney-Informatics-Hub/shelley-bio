@@ -743,46 +743,69 @@ async def _async_main() -> None:
         sys.exit(1)
 
 
+def _print_usage() -> None:
+    console.clear()
+    print_banner()
+    print_rule("Command Usage", "secondary")
+
+    usage_commands = [
+        {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
+        {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
+        {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
+        {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
+        {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"},
+        {"command": "help", "description": "Show this help message", "example": "shelley-bio help"},
+    ]
+
+    usage_table = ShelleyStyle.create_help_table(usage_commands)
+    console.print(usage_table)
+    console.print("\n")
+    console.print(ShelleyStyle.format_command_examples())
+
+    print_rule()
+    print_info("For interactive mode with guided commands: [command]shelley-bio interactive[/command]")
+
+
 def main() -> None:
     """CLI entry point. Sync commands are handled here before entering the event loop."""
     if len(sys.argv) < 2:
-        console.clear()
-        print_banner()
-        print_rule("Command Usage", "secondary")
-
-        usage_commands = [
-            {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
-            {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
-            {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
-            {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
-            {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"}
-        ]
-
-        usage_table = ShelleyStyle.create_help_table(usage_commands)
-        console.print(usage_table)
-        console.print("\n")
-        console.print(ShelleyStyle.format_command_examples())
-
-        print_rule()
-        print_info("For interactive mode with guided commands: [command]shelley-bio interactive[/command]")
+        _print_usage()
         sys.exit(1)
 
     command = sys.argv[1].lower()
 
+    if command in ("help", "--help", "-h"):
+        _print_usage()
+        sys.exit(0)
+
     if command == "build" and len(sys.argv) > 2:
         sys.exit(0 if build_module(sys.argv[2]) else 1)
 
-    if command == "find" and len(sys.argv) > 2:
-        find_tool_sync(sys.argv[2])
+    if command == "find":
+        if len(sys.argv) > 2:
+            find_tool_sync(sys.argv[2])
+        else:
+            print_warning("Missing tool name")
+            print_info("Usage: [command]shelley-bio find <tool_name>[/command]")
+            print_info("Example: [command]shelley-bio find fastqc[/command]")
         sys.exit(0)
 
-    if command == "search" and len(sys.argv) > 2:
-        query = " ".join(sys.argv[2:])
-        search_tools(query)
+    if command == "search":
+        if len(sys.argv) > 2:
+            search_tools(" ".join(sys.argv[2:]))
+        else:
+            print_warning("Missing search terms")
+            print_info("Usage: [command]shelley-bio search <description>[/command]")
+            print_info("Example: [command]shelley-bio search 'quality control'[/command]")
         sys.exit(0)
 
-    if command == "versions" and len(sys.argv) > 2:
-        versions_sync(sys.argv[2])
+    if command == "versions":
+        if len(sys.argv) > 2:
+            versions_sync(sys.argv[2])
+        else:
+            print_warning("Missing tool name")
+            print_info("Usage: [command]shelley-bio versions <tool_name>[/command]")
+            print_info("Example: [command]shelley-bio versions samtools[/command]")
         sys.exit(0)
 
     asyncio.run(_async_main())
