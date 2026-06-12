@@ -151,6 +151,23 @@ def _load_cvmfs_tool_ids() -> set[str] | None:
     return {entry["tool_name"].lower().replace("-", "_") for entry in data["entries"]}
 
 
+def _compute_version_entries(tool_id: str, pairs: list[tuple[str, str]]) -> list[dict]:
+    """Deduplicate (tag, path) pairs and annotate each with buildable status."""
+    try:
+        registry_tags = get_registry_tags(tool_id)
+        buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+    except Exception:
+        buildable_shorts = set()
+    seen: set = set()
+    result = []
+    for tag, _path in pairs:
+        short = tag.split("--")[0]
+        if short not in seen:
+            seen.add(short)
+            result.append({"version": short, "buildable": short in buildable_shorts})
+    return result
+
+
 def _load_versions_from_cache(tool_name: str) -> list[tuple[str, str]] | None:
     """
     Return (tag, path) pairs for tool_name from the CVMFS cache, sorted newest-first.
@@ -305,13 +322,13 @@ def search_tools(query: str) -> None:
 
 
 def _render_versions_page(
-    pairs: list[tuple[str, str]],
+    entries: list[dict],
     page: int,
     total_pages: int,
     total: int,
     tool_name: str,
 ) -> None:
-    """Render one page of versions with CVMFS paths."""
+    """Render one page of versions with buildable status."""
     page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
     table = Table(
         title=f"[header]Available Versions for [tool]{tool_name}[/tool] ({total} total){page_info}[/header]",
@@ -321,9 +338,10 @@ def _render_versions_page(
         show_lines=False,
     )
     table.add_column("Version", style="version", no_wrap=True)
-    table.add_column("Container Path", style="accent")
-    for version, path in pairs:
-        table.add_row(version, path)
+    table.add_column("Buildable", no_wrap=True)
+    for entry in entries:
+        buildable_str = "[success]✓[/success]" if entry["buildable"] else "[muted]✗[/muted]"
+        table.add_row(entry["version"], buildable_str)
     console.print(table)
 
 
@@ -348,10 +366,27 @@ def versions_sync(tool_name: str) -> None:
         ))
         return
 
+    entries = _compute_version_entries(tool_name, pairs)
+
     def render_page(page_items, page, total_pages, total):
         _render_versions_page(page_items, page, total_pages, total, tool_name)
 
-    _paginate(pairs, render_page)
+    _paginate(entries, render_page)
+
+    if any(not e["buildable"] for e in entries):
+        console.print(
+            "[muted]Buildable ✗: Versions not in the shpc registry may still be built, "
+            "but can take a few minutes longer. This is suited for users who need "
+            "a specific older version for reproducibility.[/muted]"
+        )
+    console.print(Panel(
+        f"To install the latest version of {tool_name}, run:\n\n"
+        f"[command]shelley-bio build {tool_name}[/command]",
+        title="[header]Install[/header]",
+        box=ROUNDED,
+        border_style="info",
+        padding=(0, 2),
+    ))
 
 
 async def query_tool(session: ClientSession, tool_name: str):
@@ -536,19 +571,7 @@ def find_tool_sync(tool_name: str) -> None:
     containers_payload = None
     if pairs:
         tool_id = meta.get("id", clean_name) if meta else clean_name
-        try:
-            registry_tags = get_registry_tags(tool_id)
-            buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
-        except Exception:
-            buildable_shorts = set()
-
-        seen: set = set()
-        unique_versions = []
-        for tag, _path in pairs:
-            short = tag.split("--")[0]
-            if short not in seen:
-                seen.add(short)
-                unique_versions.append({"version": short, "buildable": short in buildable_shorts})
+        unique_versions = _compute_version_entries(tool_id, pairs)
 
         containers_payload = {
             "available": True,
