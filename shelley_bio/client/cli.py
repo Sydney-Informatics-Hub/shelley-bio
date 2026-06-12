@@ -11,6 +11,7 @@ import math
 import sys
 import json
 import re
+from difflib import get_close_matches
 from pathlib import Path
 
 import questionary
@@ -24,7 +25,7 @@ from mcp.client.stdio import stdio_client
 from shelley_bio.utils.globals import LMOD_MODULES_PATH, DATA_DIR
 from shelley_bio.search.rsec import RsecSource
 
-from ..builder.cvmfs_builder import CVMFSModuleBuilder
+from ..builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_header, print_success,
     print_warning, print_error, print_info, print_rule, print_command
@@ -38,18 +39,12 @@ def _render_find_tool(payload: dict) -> None:
     if not payload.get("found"):
         suggestions = payload.get("suggestions", [])
         if suggestions:
-            table = Table(
-                title=f"[warning]No exact match for '[tool]{query}[/tool]'. Did you mean:[/warning]",
-                box=ROUNDED,
+            _render_tool_table(
+                suggestions,
+                f"[warning]No exact match for '[tool]{query}[/tool]'. Did you mean:[/warning]",
                 border_style="warning",
-                header_style="table.header",
-                show_header=False,
             )
-            table.add_column("Tool", style="tool", no_wrap=True)
-            table.add_column("Command", style="command", no_wrap=True)
-            for name in suggestions:
-                table.add_row(name, f"shelley-bio find {name}")
-            console.print(table)
+            _print_find_hint()
         else:
             console.print(ShelleyStyle.create_error_panel(
                 "Tool Not Found",
@@ -219,6 +214,35 @@ def _truncate(text: str, max_len: int = 60) -> str:
     return text if len(text) <= max_len else text[: max_len - 1] + "…"
 
 
+def _render_tool_table(
+    results: list[tuple[str, str]],
+    title: str,
+    border_style: str = "primary",
+) -> None:
+    """Render a Rich table of (name, description) tool pairs."""
+    table = Table(
+        title=title,
+        box=ROUNDED,
+        border_style=border_style,
+        header_style="table.header",
+        show_lines=False,
+    )
+    table.add_column("Tool", style="tool", no_wrap=True)
+    table.add_column("Description", style="muted")
+    for name, desc in results:
+        table.add_row(name, _truncate(desc))
+    console.print(table)
+
+
+def _print_find_hint(source_note: str | None = None) -> None:
+    """Print the 'use shelley-bio find' footer line."""
+    suffix = f" · Source: {source_note}" if source_note else ""
+    console.print(
+        f"[muted]For more information about a specific tool, use "
+        f"[command]shelley-bio find <name>[/command]{suffix}[/muted]"
+    )
+
+
 def _render_search_page(
     results: list[tuple[str, str]],
     page: int,
@@ -231,24 +255,10 @@ def _render_search_page(
     count = total
     suffix = "es" if count != 1 else ""
     page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
-    table = Table(
-        title=f"[header]Results for '[tool]{query}[/tool]' ({count} match{suffix}){page_info}[/header]",
-        box=ROUNDED,
-        border_style="primary",
-        header_style="table.header",
-        show_lines=False,
-    )
-    table.add_column("Tool", style="tool", no_wrap=True)
-    table.add_column("Description", style="muted")
-    for name, desc in results:
-        table.add_row(name, _truncate(desc))
-
-    console.print(table)
+    title = f"[header]Results for '[tool]{query}[/tool]' ({count} match{suffix}){page_info}[/header]"
     source_note = "RSEC bio.tools (CVMFS-available tools)" if cvmfs_filtered else "RSEC bio.tools"
-    console.print(
-        f"[muted]For more information about a specific tool, use [command]shelley-bio find <name>[/command]"
-        f" · Source: {source_note}[/muted]"
-    )
+    _render_tool_table(results, title)
+    _print_find_hint(source_note=source_note)
 
 
 def search_tools(query: str) -> None:
@@ -490,6 +500,84 @@ def list_cvmfs_versions(tool_name: str) -> None:
         console.print(error_panel)
 
 
+def find_tool_sync(tool_name: str) -> None:
+    """Find a tool by name using RSEC + CVMFS cache directly (no MCP server needed)."""
+    clean_name = re.sub(r"[:/].*$", "", tool_name).strip()
+    query_lower = clean_name.lower()
+
+    with ShelleyStyle.create_status(f"Searching for tool: {clean_name}") as _status:
+        source = RsecSource().load()
+        pairs = _load_versions_from_cache(clean_name) or []
+
+    # Exact match by id or name (case-insensitive)
+    meta = None
+    for entry in source.entries:
+        if (entry.get("id", "").lower() == query_lower or
+                entry.get("name", "").lower() == query_lower):
+            meta = entry
+            break
+
+    # If query didn't match the canonical id, retry versions lookup with meta id
+    if meta and not pairs:
+        meta_id = meta.get("id", "")
+        if meta_id.lower() != query_lower:
+            pairs = _load_versions_from_cache(meta_id) or []
+
+    found = meta is not None or bool(pairs)
+
+    suggestions: list[tuple[str, str]] = []
+    if not found:
+        entry_map = {
+            e["id"].lower(): (e.get("name") or e["id"], e.get("description") or "")
+            for e in source.entries if e.get("id")
+        }
+        suggestions = [entry_map[m] for m in get_close_matches(query_lower, entry_map.keys(), n=8, cutoff=0.6)]
+
+    containers_payload = None
+    if pairs:
+        tool_id = meta.get("id", clean_name) if meta else clean_name
+        try:
+            registry_tags = get_registry_tags(tool_id)
+            buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+        except Exception:
+            buildable_shorts = set()
+
+        seen: set = set()
+        unique_versions = []
+        for tag, _path in pairs:
+            short = tag.split("--")[0]
+            if short not in seen:
+                seen.add(short)
+                unique_versions.append({"version": short, "buildable": short in buildable_shorts})
+
+        containers_payload = {
+            "available": True,
+            "recent_versions": unique_versions[:5],
+            "total_versions": len(unique_versions),
+            "install_command": f"shelley-bio build {tool_id}",
+        }
+
+    tool_payload = None
+    if meta:
+        tool_payload = {
+            "id": meta.get("id", clean_name),
+            "name": meta.get("name", clean_name),
+            "description": meta.get("description") or "",
+            "homepage": meta.get("homepage") or "",
+            "operations": source._flatten_edam(meta.get("edam-operations")),
+            "inputs": source._flatten_edam(meta.get("edam-inputs")),
+            "outputs": source._flatten_edam(meta.get("edam-outputs")),
+        }
+
+    _render_find_tool({
+        "query": clean_name,
+        "found": found,
+        "suggestions": suggestions,
+        "tool": tool_payload,
+        "containers": containers_payload,
+    })
+
+
 async def interactive_mode(session: ClientSession):
     """Run in interactive mode."""
     console.clear()
@@ -528,7 +616,8 @@ async def interactive_mode(session: ClientSession):
                 console.print(ShelleyStyle.format_command_examples())
                 
             elif command == "find" and len(parts) > 1:
-                await query_tool(session, parts[1])
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, find_tool_sync, parts[1])
                 
             elif command == "find":
                 print_warning("Missing tool name")
@@ -609,10 +698,7 @@ async def _async_main() -> None:
                 # Initialize
                 await session.initialize()
                 
-                if command == "find" and len(sys.argv) > 2:
-                    await query_tool(session, sys.argv[2])
-
-                elif command == "interactive":
+                if command == "interactive":
                     await interactive_mode(session)
                 
                 else:
@@ -662,6 +748,10 @@ def main() -> None:
 
     if command == "build" and len(sys.argv) > 2:
         sys.exit(0 if build_module(sys.argv[2]) else 1)
+
+    if command == "find" and len(sys.argv) > 2:
+        find_tool_sync(sys.argv[2])
+        sys.exit(0)
 
     if command == "search" and len(sys.argv) > 2:
         query = " ".join(sys.argv[2:])
