@@ -11,6 +11,8 @@ import math
 import sys
 import json
 import re
+import subprocess
+import os
 from difflib import get_close_matches
 from pathlib import Path
 
@@ -26,6 +28,7 @@ from shelley_bio.utils.globals import LMOD_MODULES_PATH, DATA_DIR
 from shelley_bio.search.rsec import RsecSource
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
+from ..utils.batch import batch_build_modules
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_header, print_success,
     print_warning, print_error, print_info, print_rule, print_command
@@ -231,6 +234,20 @@ def _truncate(text: str, max_len: int = 60) -> str:
     return text if len(text) <= max_len else text[: max_len - 1] + "…"
 
 
+def _read_tools_file(path: Path) -> list[str]:
+    """Read tool specs from a file, one per line.
+
+    Strips inline comments (anything after ``#``), blank lines, and
+    leading/trailing whitespace. Raises FileNotFoundError if path is missing.
+    """
+    tools = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            tools.append(line)
+    return tools
+
+
 def _render_tool_table(
     results: list[tuple[str, str]],
     title: str,
@@ -422,9 +439,7 @@ def build_module(tool_spec: str) -> bool:
     Returns:
         bool: True if build was successful, False otherwise
     """
-    import subprocess
-    import os
-    
+    # TODO: Why is this in cli.py?
     # Check if we need sudo (by testing write access to module directory)
     module_dir = Path("/apps/Modules/modulefiles")
     needs_sudo = not os.access(module_dir, os.W_OK) if module_dir.exists() else True
@@ -490,6 +505,7 @@ def build_module(tool_spec: str) -> bool:
     except Exception as e:
         # TODO: This doesn't capture all the errors accurately, e.g. errors in CVMFSModuleBuilder methods
         # TODO: Write unit test for e.g. build samtools:1.10293891 not found
+        # TODO: Also 
         # Default message 
         title="Build Failed"
         msg=str(e)
@@ -694,6 +710,8 @@ async def interactive_mode(session: ClientSession):
 
 async def _async_main() -> None:
     """Handle commands that require the MCP server."""
+    # TODO: Contains too much duplicated code to main(). I don't think this is
+    # needed anymore as MCP is not used.
     command = sys.argv[1].lower()
 
     server_script = Path(__file__).parent.parent / "server" / "mcp_server.py"
@@ -779,7 +797,15 @@ def main() -> None:
         sys.exit(0)
 
     if command == "build" and len(sys.argv) > 2:
-        sys.exit(0 if build_module(sys.argv[2]) else 1)
+        arg = sys.argv[2]
+        p = Path(arg)
+        if p.is_file():
+            tools = _read_tools_file(p)
+            if not tools:
+                print_warning(f"No tool specs found in '{arg}' (file is empty or all comments)")
+                sys.exit(1)
+            sys.exit(batch_build_modules(tools))
+        sys.exit(0 if build_module(arg) else 1)
 
     if command == "find":
         if len(sys.argv) > 2:
@@ -808,7 +834,7 @@ def main() -> None:
             print_info("Example: [command]shelley-bio versions samtools[/command]")
         sys.exit(0)
 
-    asyncio.run(_async_main())
+    asyncio.run(_async_main()) #TODO: Not needed anymore without MCP?
 
 
 if __name__ == "__main__":

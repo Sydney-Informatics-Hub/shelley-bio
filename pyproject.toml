@@ -42,7 +42,6 @@ dev = [
 
 [project.scripts]
 shelley-bio = "shelley_bio.client.cli:main"
-shelley-bio-batch = "shelley_bio.scripts.batch_builder:main"
 shelley-bio-build-rsec = "shelley_bio.scripts.build_rsec_meta:main"
 
 [project.urls]

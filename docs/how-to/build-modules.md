@@ -25,16 +25,28 @@ Version strings follow the Bioconda convention — see `shelley-bio versions <to
 
 If the requested version has no entry in the [shpc-registry](https://github.com/singularityhub/shpc-registry), shelley-bio creates a local `container.yaml` under `/apps/local/<uri>/` and retries the install. This typically adds a few extra minutes to the build. For the reasoning behind this design, see [docs/explanation/build-design.md](../explanation/build-design.md).
 
-## Build multiple modules — batch operations
+## Build multiple modules — file input
 
-> **Placeholder:** Full batch how-to coming once `shelley-bio-batch` implementation is stable.
-
-The `shelley-bio-batch` command accepts multiple tool specs and builds them in sequence:
+Pass a plain-text file of tool specs (one per line) to `shelley-bio build`:
 
 ```bash
-shelley-bio-batch samtools fastqc bowtie2
-shelley-bio-batch samtools/1.21 fastqc/0.12.1
+shelley-bio build tools.txt
 ```
+
+**File format** — each line is a tool spec in the same format accepted by the
+single-build command. Blank lines and `#` comments are ignored:
+
+```
+# Core alignment tools
+samtools/1.21
+bwa
+bowtie2/2.5.1  # pinned for reproducibility
+
+fastqc
+```
+
+shelley-bio detects that the argument is a file, parses it, and runs the batch
+builder — showing a progress table and results summary for each tool.
 
 ## Requirements
 
