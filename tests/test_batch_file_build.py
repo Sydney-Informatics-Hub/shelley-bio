@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from shelley_bio.client.cli import _read_tools_file, main
+from shelley_bio.utils.batch import read_tools_file as _read_tools_file
+from shelley_bio.client.cli import main
 
 
 # ---------------------------------------------------------------------------

@@ -1,40 +1,28 @@
-"""
-Batch module building utilities.
-"""
+"""Batch module building utilities."""
 
-import os
-import shutil
-import subprocess
 from pathlib import Path
 
 from rich.box import ROUNDED
 from rich.table import Table
-from shelley_bio.client.cli import build_module
+
+from ..commands.build import build_module
 from .style import (
-    console, ShelleyStyle, print_banner, print_header, print_success,
-    print_error, print_rule, print_info
+    console, ShelleyStyle, print_info, print_rule,
 )
 
-def build_module_with_sudo(tool: str, shelley_bio_path: Path) -> bool:
-    """Build a single module via `sudo shelley-bio build <tool>`."""
-    with ShelleyStyle.create_status(f"Building module for: {tool}"):
-        cmd = [
-            "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
-            str(shelley_bio_path), "build", tool
-        ]
-        try:
-            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-            if result.returncode == 0:
-                print_success(f"Successfully built module for [tool]{tool}[/tool]")
-                return True
-            else:
-                print_error(f"Failed to build module for [tool]{tool}[/tool]")
-                if result.stderr:
-                    console.print(f"[muted]{result.stderr.strip()}[/muted]")
-                return False
-        except Exception as e:
-            print_error(f"Error building module for [tool]{tool}[/tool]: {e}")
-            return False
+
+def read_tools_file(path: Path) -> list[str]:
+    """Read tool specs from a file, one per line.
+
+    Strips inline comments (anything after ``#``), blank lines, and
+    leading/trailing whitespace. Raises FileNotFoundError if path is missing.
+    """
+    tools = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            tools.append(line)
+    return tools
 
 
 def batch_build_modules(tools: list[str]) -> int:
@@ -79,7 +67,7 @@ def batch_build_modules(tools: list[str]) -> int:
 
     for i, tool in enumerate(tools, 1):
         console.print(f"\n[header]Building {i}/{total_count}:[/header] [tool]{tool}[/tool]")
-        if build_module(tool, shelley_bio_path):
+        if build_module(tool):
             success_count += 1
             results.append((tool, True, "Success"))
         else:

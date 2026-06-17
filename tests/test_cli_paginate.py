@@ -16,7 +16,7 @@ import warnings
 import pytest
 import questionary
 
-from shelley_bio.client.cli import _paginate
+from shelley_bio.utils.render import paginate as _paginate
 
 
 # ---------------------------------------------------------------------------

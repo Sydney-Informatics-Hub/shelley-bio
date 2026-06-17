@@ -1,3 +1,6 @@
+#TODO: This was the initial code to build the now deprecated
+# toolfinder cache. In future, delete this or refactor into
+# shelley_bio.scripts, similar to how rsec cache was generated
 from __future__ import annotations
 
 import gzip

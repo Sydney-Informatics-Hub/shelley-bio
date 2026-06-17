@@ -13,7 +13,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from shelley_bio.builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
-from shelley_bio.client.cli import build_module
+from shelley_bio.commands.build import build_module
 
 # ---------------------------------------------------------------------------
 # Shared fixtures and helpers
@@ -237,11 +237,11 @@ def mock_builder_cls(tmp_path):
     fake_builder.shpc_install.return_value = tmp_path / "samtools" / "dummy.lua"
     fake_builder.list_versions.return_value = [v for _, v in FAKE_VERSIONS]
 
-    with patch("shelley_bio.client.cli.CVMFSModuleBuilder", return_value=fake_builder), \
+    with patch("shelley_bio.commands.build.CVMFSModuleBuilder", return_value=fake_builder), \
          patch("pathlib.Path.exists", return_value=True), \
          patch("os.access", return_value=True), \
-         patch("shelley_bio.client.cli.ShelleyStyle.create_status") as mock_status, \
-         patch("shelley_bio.client.cli.console"):
+         patch("shelley_bio.commands.build.ShelleyStyle.create_status") as mock_status, \
+         patch("shelley_bio.commands.build.console"):
         mock_status.return_value.__enter__ = MagicMock(return_value=None)
         mock_status.return_value.__exit__ = MagicMock(return_value=False)
         yield fake_builder
