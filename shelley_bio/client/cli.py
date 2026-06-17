@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..commands.build import build_module
 from ..commands.find import find_tool_sync
+from ..commands.interactive import interactive_mode
 from ..commands.search import search_tools
 from ..commands.versions import versions_sync
 from ..utils.batch import batch_build_modules, read_tools_file
@@ -29,6 +30,7 @@ def _print_usage() -> None:
         {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
         {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
         {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
+        {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"},
         {"command": "help", "description": "Show this help message", "example": "shelley-bio help"},
     ]
 
@@ -87,6 +89,10 @@ def main() -> None:
             print_warning("Missing tool name")
             print_info("Usage: [command]shelley-bio versions <tool_name>[/command]")
             print_info("Example: [command]shelley-bio versions samtools[/command]")
+        sys.exit(0)
+
+    if command == "interactive":
+        interactive_mode()
         sys.exit(0)
 
     console.print(ShelleyStyle.create_error_panel(
