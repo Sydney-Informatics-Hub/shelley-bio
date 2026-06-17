@@ -56,7 +56,7 @@ Before building, check which versions are available:
 shelley-bio versions samtools
 ```
 
-This returns every available container sorted newest-first, with the CVMFS path, file size, and last-modified date. Use this when you need to pin an exact version for reproducibility.
+This returns every available container sorted newest-first, with buildable status for each version. Use this when you need to pin an exact version for reproducibility.
 
 > **Note:** Versions is under active development. 
 
@@ -83,6 +83,6 @@ samtools --version
 
 ## Next steps
 
-- [docs/how-to/find-and-search.md](../how-to/find-and-search.md) — tips and all options for `find`, `search`, `versions`, and `list`
+- [docs/how-to/find-and-search.md](../how-to/find-and-search.md) — tips and all options for `find`, `search`, and `versions`
 - [docs/how-to/build-modules.md](../how-to/build-modules.md) — building multiple modules at once
 - [docs/reference/cli.md](../reference/cli.md) — complete command reference

@@ -6,11 +6,10 @@ Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioC
 
 ## Features
 
-- **Tool Discovery**: Find bioinformatics tools by name or browse the full catalog
+- **Tool Discovery**: Find bioinformatics tools by name or search by description
 - **Container Management**: Query available container versions from CVMFS
-- **Module Building**: Automatically generate Lmod modules for tools
-- **Interactive CLI**: User-friendly command-line interface
-- **MCP Integration**: Model Context Protocol server for AI assistants
+- **Module Building**: Automatically generate Lmod modules for tools, individually or in batch
+- **Interactive CLI**: Guided REPL for exploring and installing tools
 
 ## Quick Start
 
@@ -47,12 +46,11 @@ shelley-bio interactive
 | Type | File | What it covers |
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
-| How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions, list |
+| How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
 | How-to | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) | Dev environment and tests |
 | Reference | [docs/reference/cli.md](docs/reference/cli.md) | All CLI commands |
-| Reference | [docs/reference/mcp.md](docs/reference/mcp.md) | MCP tool schemas and resources |
 | Reference | [docs/reference/data-sources.md](docs/reference/data-sources.md) | Data artifacts and schemas |
 | Explanation | [docs/explanation/search-design.md](docs/explanation/search-design.md) | Why the search is designed this way |
 | Explanation | [docs/explanation/build-design.md](docs/explanation/build-design.md) | Why the build is designed this way |
@@ -63,11 +61,12 @@ Shelley Bio is organised as a modular Python package:
 
 ```
 shelley_bio/
-├── client/          # CLI interface and client logic
-├── server/          # MCP server for AI integration
+├── client/          # CLI entry point (thin routing)
+├── commands/        # One module per user-facing command
 ├── builder/         # CVMFS module building functionality
-├── scripts/         # Batch operations and utilities
-└── utils/           # Shared utilities and constants
+├── script/          # Run-once to generate cached data
+├── search/          # Tool metadata search sources
+└── utils/           # Shared utilities, cache, rendering, style
 ```
 
 ## Requirements

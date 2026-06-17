@@ -49,17 +49,16 @@ No need to recreate the venv unless Python itself changes.
 
 ## Running tests
 
-The test suite has three groups:
+The test suite has two groups:
 
 | Group | What it tests | Mark | Runs in CI? |
 |---|---|---|---|
-| General unit tests | Registry lookups, shpc install logic, CLI rendering | *(none)* | Yes |
+| General unit tests | Registry lookups, shpc install logic, CLI rendering, interactive mode | *(none)* | Yes |
 | CVMFS tests | Version resolution against real container files | `cvmfs` | No (skipped) |
-| Network tests | `find` buildable cross-check against GitHub shpc-registry | `network` | Yes |
 
 ### CI (GitHub Actions)
 
-Every push to a pull request runs general unit tests and network tests automatically. CVMFS tests are skipped — the CVMFS filesystem is not available in GitHub Actions. Skipped tests appear as `s` in the output.
+Every push to a pull request runs general unit tests automatically. CVMFS tests are skipped — the CVMFS filesystem is not available in GitHub Actions. Skipped tests appear as `s` in the output.
 
 ### Running locally (BioShell)
 
@@ -73,13 +72,3 @@ pytest tests/test_cvmfs_builder.py  # single file
 pytest -m "not network"             # exclude network tests when offline
 ```
 
-### `find` buildable tests (`tests/test_find_buildable.py`)
-
-Exercises `_handle_find_tool()` with 21 real-world tool arguments covering all supported input formats (`tool:version--hash`, `tool/version`, bare name, R/Bioconductor packages). Four categories:
-
-- **Smoke** — all 21 inputs return valid JSON (offline, always runs)
-- **Buildable cross-check** (`network`) — for full-tag inputs, asserts the `buildable` field matches `full_tag in get_registry_tags()` called independently
-- **Version presence** — version-only inputs resolve to a known container in the local index (offline)
-- **R packages** — confirms R/Bioconductor tools return no Singularity containers (offline)
-
-Cross-check tests skip automatically when the requested version is not in the top-5 most recent results (expected for older tags like `blast:2.5.0`).

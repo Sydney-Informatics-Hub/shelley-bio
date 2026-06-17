@@ -18,9 +18,9 @@ shelley-bio find <tool_name>
 |---|---|---|
 | `tool_name` | string | Yes |
 
-Looks up a tool by name. Case-insensitive; handles hyphen/underscore variants. Tries `id`, `name`, `biotools`, and `biocontainers` fields from metadata; falls back to fuzzy matching when no exact match is found.
+Looks up a tool by name. Case-insensitive; handles hyphen/underscore variants. Matches against the `id` and `name` fields in the RSEC corpus; falls back to fuzzy matching when no exact match is found.
 
-**Returns:** Tool metadata, latest container path and copy-pastable Singularity commands, a table of recent versions with buildable status and install state.
+**Returns:** Tool description, homepage, and EDAM operations; a table of recent container versions with buildable status and install state; an install prompt.
 
 ---
 
@@ -54,23 +54,7 @@ shelley-bio versions <tool_name>
 
 Lists every available container version for a tool, sorted newest-first.
 
-**Returns:** Version tag, CVMFS path, size in MB, and last-modified date for each entry.
-
----
-
-## `list`
-
-```bash
-shelley-bio list [limit]
-```
-
-| Argument | Type | Default |
-|---|---|---|
-| `limit` | integer | 50 |
-
-Alphabetical browse of available tool names. Draws from both the metadata catalog and the container index, so includes tools that have containers but no metadata record.
-
-**Returns:** Columnar alphabetical list of tool names.
+**Returns:** Version tag and buildable status (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback) for each entry; an install prompt.
 
 ---
 
@@ -106,7 +90,6 @@ Starts a REPL session. Available commands inside the REPL:
 find <tool_name>
 search <description>
 versions <tool_name>
-list [limit]
 build <tool_spec>
 help
 quit / exit

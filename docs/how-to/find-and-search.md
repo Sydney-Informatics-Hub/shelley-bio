@@ -1,8 +1,6 @@
 # How to find and search for tools
 
-This guide covers the four read-only commands: `find`, `search`, `versions`, and `list`.
-
-For the MCP tool schemas used by AI assistants, see [docs/reference/mcp.md](../reference/mcp.md).
+This guide covers the three read-only commands: `find`, `search`, and `versions`.
 
 ## Find a tool by name — `find`
 
@@ -16,13 +14,12 @@ shelley-bio find bwa-mem2      # hyphens and underscores handled automatically
 
 **Returns:**
 - Tool description, homepage, and EDAM operations
-- Most recent container version and CVMFS path
-- Copy-pastable `singularity exec` and `singularity shell` commands
-- A table of the next most-recent versions with buildable status and install state
+- A table of recent container versions with buildable status and install state
+- An install prompt with the `shelley-bio build` command
 
 If no exact match is found, shelley-bio suggests close alternatives.
 
-> **Note:** `find` is case-sensitive. `shelley-bio find Arriba` and `shelley-bio find arriba` may return different results — use the tool's canonical casing (usually lowercase) if you don't get a match.
+> **Note:** `find` is case-insensitive. `shelley-bio find Arriba` and `shelley-bio find arriba` return the same result.
 
 ## Search by function — `search`
 
@@ -71,8 +68,6 @@ shelley-bio versions bwa
 shelley-bio versions gatk
 ```
 
-**Returns:** Every available version with CVMFS path, file size, and last-modified date.
+**Returns:** Every available version with buildable status (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback); an install prompt.
 
-Use this when you need to pin an exact version — for reproducibility or to test a specific release.
-
-> **Note:** Versions is under active development — corpus and ranking improvements are coming.
+Use this when you need to pin an exact version for reproducibility or to test a specific release.
