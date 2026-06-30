@@ -50,7 +50,7 @@ Homepage = "https://github.com/shelley-bio/shelley-bio"
 Source = "https://github.com/shelley-bio/shelley-bio"
 
 [tool.uv.sources]
-container-guts = { path = "../guts", editable = true }
+container-guts = { git = "https://github.com/Sydney-Informatics-Hub/guts.git", branch = "singularity" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["shelley_bio"]

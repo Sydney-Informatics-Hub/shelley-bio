@@ -15,9 +15,15 @@ Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioC
 
 ### Installation
 
-`shelley-bio` is installed as part of [BioShell](https://github.com/AustralianBioCommons/BioShell).
+`shelley-bio` ships with [BioShell](https://github.com/AustralianBioCommons/BioShell).
 
-For development instructions, see [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md).
+To install or update shelley-bio manually:
+
+| Goal | Guide |
+|---|---|
+| Install on a workstation or VM | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) |
+| Deploy via Ansible (BioShell) | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) |
+| Developer environment | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) |
 
 ### Basic Usage
 
@@ -46,6 +52,8 @@ shelley-bio interactive
 | Type | File | What it covers |
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
+| How-to | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) | Install without a venv |
+| How-to | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) | Ansible deployment for BioShell VMs |
 | How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
