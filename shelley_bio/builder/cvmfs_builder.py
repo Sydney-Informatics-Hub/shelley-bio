@@ -5,57 +5,96 @@ CVMFS Module Builder
 Builds Lmod module files for tools available in CVMFS.
 """
 
+import hashlib
+import logging
+import shutil
 import subprocess
+import yaml
 from pathlib import Path
 from typing import List, Optional, Tuple
 import re
 import questionary
+from datetime import datetime
+from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
+from shelley_bio.utils import console, ShelleyStyle
+from shelley_bio.builder.guts_integration import extract_aliases
 
-from ..utils.style import console, ShelleyStyle
+log = logging.getLogger(__name__)
+
+_SHPC = shutil.which("shpc") or "/opt/shpc/bin/shpc"
+
+def _load_registry_config(uri: str, local_yaml: Path, force_upstream: bool = False) -> dict:
+    """Return the shpc registry config dict for uri.
+
+    Loads from local_yaml if it exists (unless force_upstream=True).  Otherwise
+    fetches the upstream shpc-registry container.yaml and saves it to local_yaml
+    (best-effort; silently skips the write on PermissionError so read-only callers
+    still get a result; also skipped when force_upstream=True to avoid polluting the
+    local cache with a forced read).  Returns an empty dict if neither source is
+    reachable.
+    """
+    if not force_upstream and local_yaml.exists():
+        with open(local_yaml) as f:
+            return yaml.safe_load(f) or {}
+
+    remote_url = (
+        f"https://raw.githubusercontent.com/singularityhub/shpc-registry/main/{uri}/container.yaml"
+    )
+    try:
+        result = subprocess.run(
+            ["curl", "-fsSL", "--max-time", "10", remote_url],
+            capture_output=True, text=True,
+        )
+    except Exception:
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    config = yaml.safe_load(result.stdout) or {}
+
+    if not force_upstream:
+        try:
+            local_yaml.parent.mkdir(parents=True, exist_ok=True)
+            with open(local_yaml, "w") as f:
+                yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        except PermissionError:
+            pass
+
+    return config
+
+
+def get_registry_tags(tool_name: str, local_registry: str = "/apps/local",
+                      upstream_only: bool = False) -> set:
+    """Return the set of version tags known to shpc for tool_name.
+
+    When upstream_only=True, always fetches fresh from the upstream shpc-registry,
+    ignoring any locally-cached container.yaml.  Use this to check whether a
+    specific version exists in the upstream registry before deciding to create a
+    local entry.
+    """
+    uri = f"quay.io/biocontainers/{tool_name}"
+    local_yaml = Path(local_registry) / uri / "container.yaml"
+    config = _load_registry_config(uri, local_yaml, force_upstream=upstream_only)
+    return set(config.get("tags", {}).keys())
 
 
 class CVMFSModuleBuilder:
     """Builds Lmod modules for CVMFS tools."""
     
-    CVMFS_SINGULARITY_PATH = Path("/cvmfs/singularity.galaxyproject.org/all")
-    LMOD_MODULES_PATH = Path("/apps/Modules/modulefiles")
-    
-    def __init__(self):
-        """Initialize the module builder."""
-        pass
-    
+    def __init__(
+        self,
+        cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH, 
+        lmod_modules: str = LMOD_MODULES_PATH
+    ):
+        self.cvmfs_singularity = cvmfs_singularity
+        self.lmod_modules = lmod_modules
+        self.cvmfs_singularity_path = Path(self.cvmfs_singularity)
+        self.lmod_modules_path = Path(self.lmod_modules)
+
     def _is_cvmfs_available(self) -> bool:
         """Check if CVMFS is mounted and accessible."""
-        return self.CVMFS_SINGULARITY_PATH.exists() and self.CVMFS_SINGULARITY_PATH.is_dir()
-    
-    def _get_available_tools(self, tool_name: str) -> List[Tuple[str, str]]:
-        """
-        Get available versions of a tool from CVMFS.
-        
-        Args:
-            tool_name: Name of the tool to search for
-            
-        Returns:
-            List of (tool_name, version) tuples
-        """
-        if not self._is_cvmfs_available():
-            raise RuntimeError("CVMFS not available at /cvmfs/singularity.galaxyproject.org/all")
-        
-        # Search for containers matching the tool name
-        try:
-            containers = []
-            for item in self.CVMFS_SINGULARITY_PATH.iterdir():
-                if item.is_file() or item.is_symlink():
-                    # Container names are like "samtools:1.22" 
-                    name = item.name
-                    if ":" in name:
-                        container_tool, version = name.split(":", 1)
-                        if container_tool.lower() == tool_name.lower():
-                            containers.append((container_tool, version))
-            
-            return containers
-        except (OSError, PermissionError) as e:
-            raise RuntimeError(f"Failed to read CVMFS directory: {e}")
+        return self.cvmfs_singularity_path.exists() and self.cvmfs_singularity_path.is_dir()
     
     def _parse_version(self, version_str: str) -> Tuple[int, ...]:
         """
@@ -83,6 +122,38 @@ class CVMFSModuleBuilder:
         
         return tuple(parts)
     
+    def _sort_versions(self, versions: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+        """Sort versions by semantic versioning, newest first."""
+        return sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+    
+    def _get_available_tools(self, tool_name: str) -> List[Tuple[str, str]]:
+        """
+        Get available versions of a tool from CVMFS.
+        
+        Args:
+            tool_name: Name of the tool to search for
+            
+        Returns:
+            List of (tool_name, version) tuples
+        """
+        if not self._is_cvmfs_available():
+            raise RuntimeError(f"CVMFS not available at {self.cvmfs_singularity}")
+
+        try:
+            containers = []
+            for item in self.cvmfs_singularity_path.iterdir():
+                if item.is_file() or item.is_symlink():
+                    # Container names are like "samtools:1.22" 
+                    name = item.name
+                    if ":" in name:
+                        container_tool, version = name.split(":", 1)
+                        if container_tool.lower() == tool_name.lower():
+                            containers.append((container_tool, version))
+            
+            return containers
+        except (OSError, PermissionError) as e:
+            raise RuntimeError(f"Failed to read CVMFS directory: {e}")
+    
     def _get_latest_version(self, versions: List[Tuple[str, str]]) -> Tuple[str, str]:
         """
         Get the latest version from a list of versions.
@@ -97,119 +168,179 @@ class CVMFSModuleBuilder:
             raise ValueError("No versions provided")
         
         # Sort by version, latest first
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+        sorted_versions = self._sort_versions(versions)
         return sorted_versions[0]
-    
-    def create_module_file(self, tool_name: str, version: str) -> Path:
+
+    def _compute_sha256(self, path: str) -> str:
+        """Compute the SHA-256 digest of a file (e.g. a SIF container)."""
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _is_registry_miss(self, output: str) -> bool:
+        """Return True if shpc output indicates the tag is absent from the registry."""
+        lower = output.lower()
+        return any(p in lower for p in [
+            "not found", "not in registry", "does not exist",
+            "is not a known identifier", "no container", "unknown tag",
+        ])
+
+    def _run_shpc_install(self, uri_tag: str, container_path: str) -> Tuple[int, str]:
         """
-        Create an Lmod module file for the specified tool and version.
-        
-        Args:
-            tool_name: Name of the tool
-            version: Version of the tool
-            
+        Run: shpc install <uri_tag> <container_path> --keep-path
+
+        Example:
+            shpc install \
+                quay.io/biocontainers/plink:1.90b7.7--h18e278d_1 \
+                /cvmfs/singularity.galaxyproject.org/all/plink:1.90b7.7--h18e278d_1 \
+                --keep-path
+
         Returns:
-            Path to the created module file
-            
-        Raises:
-            PermissionError: If unable to write to module directory
+            (returncode, combined stdout+stderr)
         """
-        # Create module directory
-        module_dir = self.LMOD_MODULES_PATH / tool_name
-        module_file = module_dir / f"{version}.lua"
+        msg = f"Running shpc install {uri_tag} {container_path} --keep-path"
+        log.info(msg)
         
-        try:
-            module_dir.mkdir(parents=True, exist_ok=True)
-        except PermissionError:
-            raise PermissionError(
-                f"Permission denied creating module directory: {module_dir}\n"
-                f"You must run this command with sudo privileges."
-            )
-        
-        # Container path
-        container_path = f"/cvmfs/singularity.galaxyproject.org/all/{tool_name}:{version}"
-        
-        # Module content
-        module_content = f'''help([[{tool_name.title()} {version} from CVMFS
+        result = subprocess.run(
+            [_SHPC, "install", uri_tag, container_path, "--keep-path"],
+            capture_output=True, text=True,
+        )
+        return result.returncode, result.stdout + result.stderr
 
-This module provides access to {tool_name} version {version} via Singularity container.
-All executables from the container are available in your PATH.
-
-Usage examples:
-  For BLAST: blastn, blastp, blastx, tblastn, tblastx
-  For other tools: see container documentation
-
-Container path: {container_path}
-]])
-
-load("singularity")
-
-local containerPath = "{container_path}"
-
--- Function to execute commands in container
-local function container_exec(cmd)
-    return "singularity exec " .. containerPath .. " " .. cmd
-end
-
--- Add container executables to PATH via wrapper functions
-prepend_path("PATH", pathJoin(os.getenv("MODULEPATH") or "", "..", "wrappers", "{tool_name}", "{version}"))
-
--- Create primary alias for the tool name (if executable exists)
-set_alias("{tool_name}", container_exec("{tool_name}"))
-
--- For tools with known multiple executables, create additional aliases
-if "{tool_name}" == "blast" then
-    set_alias("blastn", container_exec("blastn"))
-    set_alias("blastp", container_exec("blastp"))
-    set_alias("blastx", container_exec("blastx"))
-    set_alias("tblastn", container_exec("tblastn"))
-    set_alias("tblastx", container_exec("tblastx"))
-    set_alias("makeblastdb", container_exec("makeblastdb"))
-    set_alias("blast_formatter", container_exec("blast_formatter"))
-end
-
-if "{tool_name}" == "samtools" then
-    set_alias("samtools", container_exec("samtools"))
-end
-
-if "{tool_name}" == "fastqc" then
-    set_alias("fastqc", container_exec("fastqc"))
-end
-
--- Generic function to run any command in the container
-set_alias("{tool_name}_exec", container_exec("$*"))
-'''
-        
-        try:
-            module_file.write_text(module_content)
-        except PermissionError:
-            raise PermissionError(
-                f"Permission denied writing module file: {module_file}\n"
-                f"You must run this command with sudo privileges."
-            )
-        
-        return module_file
-    
-    def _refresh_module_cache(self) -> Tuple[bool, str]:
-        """
-        Refresh the Lmod module cache.
-        
-        Returns:
-            Tuple of (success, output)
-        """
+    def _register_local_registry(self, local_registry: str) -> None:
+        """Ensure local_registry is in shpc's registry search path (best-effort)."""
         try:
             result = subprocess.run(
-                ["module", "--ignore_cache", "avail"],
-                capture_output=True,
-                text=True,
-                check=False
+                [_SHPC, "config", "get", "registry"],
+                capture_output=True, text=True,
             )
-            return True, result.stderr  # module avail outputs to stderr
-        except FileNotFoundError:
-            return False, "Lmod not available (module command not found)"
+            if local_registry not in result.stdout:
+                subprocess.run(
+                    [_SHPC, "config", "add", "registry", local_registry],
+                    capture_output=True, text=True, check=True,
+                )
+                log.info("Registered local registry with shpc: %s", local_registry)
         except Exception as e:
-            return False, f"Error running module command: {e}"
-    
+            log.warning("Could not register local registry with shpc: %s", e)
+
+    def _ensure_local_registry_entry(
+        self, tool_name: str, version: str, container_path: str, uri: str,
+        local_registry: str = LOCAL_REGISTRY,
+    ) -> None:
+        """
+        Create or update a local shpc registry entry for a CVMFS tag absent from
+        the upstream shpc-registry.
+
+        Downloads the upstream container.yaml as a base (preserving other version tags
+        and tool metadata), extracts aliases from the specific SIF via guts diff, adds
+        the SHA256 tag for this version, and writes the result.  Only called when the
+        version is confirmed absent from the upstream registry.
+        """
+        registry_dir = Path(local_registry) / uri
+        registry_yaml = registry_dir / "container.yaml"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+
+        # Extract aliases from the specific SIF being installed.
+        aliases = extract_aliases(container_path)
+        if not aliases:
+            log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+
+        # Download upstream entry as a base (best-effort; tool may not be in upstream at all)
+        remote_url = (
+            f"https://raw.githubusercontent.com/singularityhub/shpc-registry/main/{uri}/container.yaml"
+        )
+        subprocess.run(
+            ["curl", "-fsSL", remote_url, "-o", str(registry_yaml)],
+            capture_output=True, text=True,
+        )
+
+        config = _load_registry_config(uri, registry_yaml)
+        if not config:
+            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": aliases}
+        else:
+            config["aliases"] = aliases
+
+        sha256 = self._compute_sha256(container_path)
+        config.setdefault("tags", {})[version] = f"sha256:{sha256}"
+
+        registry_yaml.parent.mkdir(parents=True, exist_ok=True)
+        with open(registry_yaml, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    def _shpc_uninstall(self, uri_tag: str) -> None:
+        """Uninstall an existing shpc entry (best-effort; ignores errors)."""
+        subprocess.run([_SHPC, "uninstall", "--force", uri_tag], capture_output=True, text=True)
+
+    def shpc_install(self, tool_name: str, version: str) -> Path:
+        """
+        Install a CVMFS container as a functional Lmod module using shpc.
+
+        Two paths:
+        - Version in upstream shpc-registry: call shpc install directly; upstream
+          aliases are used as-is.  Retry once (uninstall + reinstall) on path-exists
+          conflict.
+        - Version absent from upstream: uninstall any stale install, create a local
+          registry entry with guts-extracted aliases, then call shpc install once.
+
+        Returns:
+            Path to the symlinked .lua file (the user-facing module path).
+        """
+        uri = f"quay.io/biocontainers/{tool_name}"
+        uri_tag = f"{uri}:{version}"
+        container_path = str(self.cvmfs_singularity_path / f"{tool_name}:{version}")
+
+        in_upstream = version in get_registry_tags(tool_name, upstream_only=True)
+
+        if not in_upstream:
+            # Version absent from upstream — uninstall stale build, create local entry.
+            self._shpc_uninstall(uri_tag)
+            self._ensure_local_registry_entry(tool_name, version, container_path, uri)
+            self._register_local_registry(LOCAL_REGISTRY)
+            console.print(ShelleyStyle.create_warning_panel(
+                "Tag not in registry",
+                f"{uri}:{version} is not in the upstream shpc-registry. "
+                f"A local entry has been created in {LOCAL_REGISTRY}.",
+            ))
+
+        returncode, output = self._run_shpc_install(uri_tag, container_path)
+
+        if returncode and in_upstream:
+            # Path-exists conflict on upstream tool — uninstall and retry once.
+            self._shpc_uninstall(uri_tag)
+            returncode, output = self._run_shpc_install(uri_tag, container_path)
+
+        if returncode:
+            raise RuntimeError(
+                f"shpc install failed for {uri_tag}:\n{output.strip()}"
+            )
+
+        # When running as root via sudo, new shpc dirs are created as root.
+        # Restore ownership to the original user so non-root shpc calls (e.g. tests)
+        # can write to the same paths without re-running as root.
+        import os as _os
+        sudo_user = _os.environ.get("SUDO_USER")
+        if _os.getuid() == 0 and sudo_user:
+            subprocess.run(
+                ["chown", "-R", f"{sudo_user}:{sudo_user}", SHPC_BASE],
+                capture_output=True, text=True,
+            )
+
+        shpc_module_base = Path(subprocess.run(
+            [_SHPC, "config", "get", "module_base"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip())
+        src = shpc_module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
+        dest_dir = self.lmod_modules_path / tool_name
+        dest = dest_dir / f"{version}.lua"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+        dest.symlink_to(src)
+
+        return dest
+
     def list_versions(self, tool_name: str) -> List[str]:
         """
         List available versions of a tool without creating a module.
@@ -225,7 +356,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             return []
         
         # Sort versions newest first
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
+        sorted_versions = self._sort_versions(versions)
         return [version for _, version in sorted_versions]
 
     def list_versions_with_paths(self, tool_name: str) -> List[Tuple[str, str]]:
@@ -238,14 +369,9 @@ set_alias("{tool_name}_exec", container_exec("$*"))
         Returns:
             List of (version, full_path) tuples
         """
-        versions = self._get_available_tools(tool_name)
-        if not versions:
-            return []
-        
-        # Sort versions newest first and create full paths
-        sorted_versions = sorted(versions, key=lambda x: self._parse_version(x[1]), reverse=True)
-        return [(version, str(self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{version}")) 
-                for _, version in sorted_versions]
+        sorted_versions = self.list_versions(tool_name)
+        return [(version, str(self.cvmfs_singularity_path / f"{tool_name}:{version}"))
+                for version in sorted_versions]
 
     def _select_version_interactively(
         self,
@@ -290,14 +416,20 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             requested_version: Optional full or short version string to match.
 
         Returns:
-            A ``(tool_name, version)`` tuple for the selected tool version. 
-            These are the exact inputs required for self.create_module_file.
+            A ``(tool_name, version)`` tuple for the selected tool version.
+            These are the exact inputs required for self.shpc_install.
 
         Raises:
             ValueError: If no matching version exists or the request is ambiguous.
         """
         # Get available versions as (tool, full_version) tuples
         available_versions = self._get_available_tools(tool_name)
+
+        if not available_versions:
+            raise ValueError(
+                f"'{tool_name}' not found in CVMFS at {self.cvmfs_singularity}. "
+                "Check the tool name and that CVMFS is mounted."
+            )
 
         if requested_version is None:
             # If no version was specified, return the latest version
@@ -319,11 +451,9 @@ set_alias("{tool_name}_exec", container_exec("$*"))
             )
         
         if len(matches) > 1:
-            from datetime import datetime
-
             def _mtime(ver: str) -> float:
                 try:
-                    return (self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}").stat().st_mtime
+                    return (self.cvmfs_singularity_path / f"{tool_name}:{ver}").stat().st_mtime
                 except OSError:
                     return 0.0
 
@@ -331,7 +461,7 @@ set_alias("{tool_name}_exec", container_exec("$*"))
 
             labels = []
             for _, ver in matches_sorted:
-                path = self.CVMFS_SINGULARITY_PATH / f"{tool_name}:{ver}"
+                path = self.cvmfs_singularity_path / f"{tool_name}:{ver}"
                 try:
                     stat = path.stat()
                     size_mb = stat.st_size / (1024 ** 2)
@@ -342,41 +472,4 @@ set_alias("{tool_name}_exec", container_exec("$*"))
 
             return self._select_version_interactively(tool_name, matches_sorted, labels)
             
-        return matches[0] # Only a single match. yay!
-
-def format_versions_list(versions: List[str]) -> None:
-    """Display a formatted list of versions using Rich."""
-    if not versions:
-        console.print(ShelleyStyle.create_info_panel("No Versions", "No versions found for this tool"))
-        return
-    
-    # Create a nice table of versions
-    from rich.table import Table
-    
-    table = Table(
-        title="[header]Available Versions[/header]",
-        show_header=True,
-        header_style="table.header",
-        border_style="border"
-    )
-    
-    table.add_column("Version", style="version")
-    table.add_column("Status", style="success")
-    
-    for version in versions:
-        table.add_row(version, "✓ Available")
-    
-    console.print(table)
-
-
-def format_build_output(
-    tool_name: str, 
-    version: str, 
-    module_file: Path, 
-    available_versions: List[str], 
-    requested_version: Optional[str] = None
-) -> None:
-    """Display formatted build output using Rich."""
-    # This function is now handled by the ShelleyStyle class methods
-    # in the CLI client, so we just pass through
-    pass
+        return matches[0]
