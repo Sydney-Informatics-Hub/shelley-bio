@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "shelley-bio"
+name = "shelley"
 version = "0.1.0"
 description = "A powerful bioinformatics tool finder and module builder for CVMFS"
 readme = "README.md"
@@ -40,19 +40,19 @@ dev = [
 ]
 
 [project.scripts]
-shelley-bio = "shelley_bio.client.cli:main"
-shelley-bio-build-rsec = "shelley_bio.scripts.build_rsec_meta:main"
+shelley = "shelley.client.cli:main"
+shelley-build-rsec = "shelley.scripts.build_rsec_meta:main"
 
 [project.urls]
-Homepage = "https://github.com/shelley-bio/shelley-bio"
-"Bug Reports" = "https://github.com/shelley-bio/shelley-bio/issues"
-Source = "https://github.com/shelley-bio/shelley-bio"
+Homepage = "https://github.com/Sydney-Informatics-Hub/shelley"
+"Bug Reports" = "https://github.com/Sydney-Informatics-Hub/shelley/issues"
+Source = "https://github.com/Sydney-Informatics-Hub/shelley"
 
 [tool.uv.sources]
 container-guts = { git = "https://github.com/Sydney-Informatics-Hub/guts.git", branch = "singularity" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["shelley_bio"]
+packages = ["shelley"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

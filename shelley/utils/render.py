@@ -68,9 +68,9 @@ def render_tool_table(
 
 
 def print_find_hint(source_note: str | None = None) -> None:
-    """Print the 'use shelley-bio find' footer line."""
+    """Print the 'use shelley find' footer line."""
     suffix = f" · Source: {source_note}" if source_note else ""
     console.print(
         f"[muted]For more information about a specific tool, use "
-        f"[command]shelley-bio find <name>[/command]{suffix}[/muted]"
+        f"[command]shelley find <name>[/command]{suffix}[/muted]"
     )

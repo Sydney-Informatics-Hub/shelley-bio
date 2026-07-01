@@ -1,16 +1,16 @@
-"""Tests for shelley_bio/commands/interactive.py — interactive REPL loop."""
+"""Tests for shelley/commands/interactive.py — interactive REPL loop."""
 
 from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from shelley_bio.commands.interactive import interactive_mode
+from shelley.commands.interactive import interactive_mode
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-_MODULE = "shelley_bio.commands.interactive"
+_MODULE = "shelley.commands.interactive"
 
 
 def _run(inputs: list, *, side_effect=None):
@@ -187,8 +187,8 @@ def test_unknown_command_warns():
 
 def test_command_table_renders_without_markup_error():
     """_COMMANDS must not contain unescaped Rich markup (e.g. [/ver] as a closing tag)."""
-    from shelley_bio.commands.interactive import _COMMANDS
-    from shelley_bio.utils.style import ShelleyStyle, console
+    from shelley.commands.interactive import _COMMANDS
+    from shelley.utils.style import ShelleyStyle, console
 
     table = ShelleyStyle.create_help_table(_COMMANDS)
     with console.capture():

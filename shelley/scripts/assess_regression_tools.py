@@ -6,7 +6,7 @@ Reports which tools are present in RSEC and toolfinder, and how many EDAM
 terms are populated per field. Reads the committed artifacts — no network required.
 
 Usage:
-    python3 shelley_bio/scripts/assess_regression_tools.py
+    python3 shelley/scripts/assess_regression_tools.py
 """
 
 from __future__ import annotations

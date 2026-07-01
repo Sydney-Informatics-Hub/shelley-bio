@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Report field-coverage statistics for shelley-bio metadata sources.
+Report field-coverage statistics for shelley metadata sources.
 
 Usage:
-    python3 shelley_bio/scripts/assess_coverage.py [rsec|toolfinder]
+    python3 shelley/scripts/assess_coverage.py [rsec|toolfinder]
 
 Without an argument, both sources are reported.
 Reads the committed artifacts — no network access required.
@@ -57,7 +57,7 @@ def report_toolfinder() -> None:
 def report_rsec() -> None:
     if not RSEC_FILE.exists():
         print(f"[rsec] File not found: {RSEC_FILE}", file=sys.stderr)
-        print("[rsec] Run: shelley-bio-build-rsec", file=sys.stderr)
+        print("[rsec] Run: shelley-build-rsec", file=sys.stderr)
         return
     with gzip.open(RSEC_FILE, "rt") as f:
         doc = json.load(f)

@@ -12,8 +12,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from shelley_bio.utils.globals import DATA_DIR
-from shelley_bio.search.base import MetadataSource
+from shelley.utils.globals import DATA_DIR
+from shelley.search.base import MetadataSource
 
 RSEC_DATA_PATH = DATA_DIR / "rsec_meta.json.gz"
 
@@ -41,7 +41,7 @@ class RsecSource(MetadataSource):
         """
         Load rsec_meta.json.gz into self.entries.
 
-        The artifact is a gzipped JSON file produced by shelley-bio-build-rsec.
+        The artifact is a gzipped JSON file produced by shelley-build-rsec.
         Top-level keys: generated_at, source, source_commit, entry_count,
         field_coverage, entries. Only entries is loaded here.
         """

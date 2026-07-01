@@ -15,7 +15,7 @@ def search_tools(query: str) -> None:
             console.print(ShelleyStyle.create_error_panel(
                 "Corpus Not Found",
                 "rsec_meta.json.gz is missing.",
-                "Run: shelley-bio-build-rsec",
+                "Run: shelley-build-rsec",
             ))
             return
 

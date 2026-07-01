@@ -38,7 +38,7 @@ def batch_build_modules(tools: list[str]) -> int:
         console.print(ShelleyStyle.create_info_panel(
             "No tools specified",
             "Pass a file of tool specs to build in batch:\n\n"
-            "[command]shelley-bio build tools.txt[/command]",
+            "[command]shelley build tools.txt[/command]",
         ))
         return 0
 

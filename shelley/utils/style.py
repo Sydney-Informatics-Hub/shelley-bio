@@ -292,7 +292,7 @@ class ShelleyStyle:
 [header]Building latest version:[/header] [version]{version}[/version]
 
 [header]To specify a version:[/header]
-[command]shelley-bio build {tool_name}/{version}[/command]"""
+[command]shelley build {tool_name}/{version}[/command]"""
 
         return Panel(
             content,
@@ -353,13 +353,13 @@ class ShelleyStyle:
         table.add_column("Command", style="command", ratio=2)
         
         examples = [
-            ("Find a specific tool", "shelley-bio find fastqc"),
-            ("Search by functionality", "shelley-bio search 'quality control'"),  
-            ("Search for RNA-seq tools", "shelley-bio search 'RNA sequencing'"),
-            ("List available versions", "shelley-bio versions samtools"),
-            ("Build latest version", "shelley-bio build samtools"),
-            ("Build specific version", "shelley-bio build samtools/1.21"),
-            ("Interactive mode", "shelley-bio interactive")
+            ("Find a specific tool", "shelley find fastqc"),
+            ("Search by functionality", "shelley search 'quality control'"),  
+            ("Search for RNA-seq tools", "shelley search 'RNA sequencing'"),
+            ("List available versions", "shelley versions samtools"),
+            ("Build latest version", "shelley build samtools"),
+            ("Build specific version", "shelley build samtools/1.21"),
+            ("Interactive mode", "shelley interactive")
         ]
         
         for use_case, command in examples:
@@ -400,7 +400,7 @@ class ShelleyStyle:
         try:
             # Try to get version from package metadata
             import importlib.metadata
-            version = importlib.metadata.version('shelley-bio')
+            version = importlib.metadata.version('shelley')
         except Exception:
             version = "1.0.0-dev"
         

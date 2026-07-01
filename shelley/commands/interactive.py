@@ -1,4 +1,4 @@
-"""Interactive command — guided REPL for shelley-bio."""
+"""Interactive command — guided REPL for shelley."""
 
 from .build import build_module
 from .find import find_tool_sync
@@ -29,7 +29,7 @@ def interactive_mode() -> None:
 
     while True:
         try:
-            raw = console.input("\n[prompt]shelley-bio>[/prompt] ").strip()
+            raw = console.input("\n[prompt]shelley>[/prompt] ").strip()
         except (KeyboardInterrupt, EOFError):
             print_info("\nExiting interactive mode...")
             break

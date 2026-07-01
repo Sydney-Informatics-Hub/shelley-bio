@@ -7,7 +7,7 @@ without needing a subclass or any data files.
 
 import pytest
 
-from shelley_bio.search.base import MetadataSource
+from shelley.search.base import MetadataSource
 
 
 @pytest.fixture

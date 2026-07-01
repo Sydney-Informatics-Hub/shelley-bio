@@ -16,7 +16,7 @@ and is immediately understandable to anyone who can read a traceback.
 import re
 from typing import Optional
 
-from shelley_bio.utils.constants import STOP_WORDS
+from shelley.utils.constants import STOP_WORDS
 
 
 class MetadataSource:

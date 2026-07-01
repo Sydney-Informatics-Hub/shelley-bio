@@ -12,23 +12,23 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Sydney-Informatics-Hub/shelley-bio.git
-cd shelley-bio
+git clone https://github.com/Sydney-Informatics-Hub/shelley.git
+cd shelley
 
-# 2. Install shelley-bio and dev dependencies
+# 2. Install shelley and dev dependencies
 uv sync --extra dev
 
 # 3. Load required modules
 module load singularity shpc
 
 # 4. Verify
-uv run shelley-bio --help
+uv run shelley --help
 uv run pytest --collect-only   # confirm pytest is installed; do not run yet
 ```
 
 > **No venv activation needed.** `uv sync` creates a managed `.venv` automatically. Run all commands through `uv run` — you never need to activate the environment manually.
 
-> **Why `uv` and not plain `pip`?** `pyproject.toml` declares `container-guts` as a git source dependency (`[tool.uv.sources]`). Plain `pip install -e .` ignores this table and tries to pull `container-guts` from PyPI, which is missing the Singularity support shelley-bio requires.
+> **Why `uv` and not plain `pip`?** `pyproject.toml` declares `container-guts` as a git source dependency (`[tool.uv.sources]`). Plain `pip install -e .` ignores this table and tries to pull `container-guts` from PyPI, which is missing the Singularity support shelley requires.
 
 ## Keeping the environment up to date
 

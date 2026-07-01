@@ -26,12 +26,12 @@ def _print_usage() -> None:
     print_rule("Command Usage", "secondary")
 
     usage_commands = [
-        {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley-bio find fastqc"},
-        {"command": "search <description>", "description": "Search for tools by function", "example": "shelley-bio search 'quality control'"},
-        {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley-bio versions samtools"},
-        {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley-bio build samtools/1.21"},
-        {"command": "interactive", "description": "Start interactive mode", "example": "shelley-bio interactive"},
-        {"command": "help", "description": "Show this help message", "example": "shelley-bio help"},
+        {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley find fastqc"},
+        {"command": "search <description>", "description": "Search for tools by function", "example": "shelley search 'quality control'"},
+        {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley versions samtools"},
+        {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley build samtools/1.21"},
+        {"command": "interactive", "description": "Start interactive mode", "example": "shelley interactive"},
+        {"command": "help", "description": "Show this help message", "example": "shelley help"},
     ]
 
     usage_table = ShelleyStyle.create_help_table(usage_commands)
@@ -69,8 +69,8 @@ def main() -> None:
             find_tool_sync(sys.argv[2])
         else:
             print_warning("Missing tool name")
-            print_info("Usage: [command]shelley-bio find <tool_name>[/command]")
-            print_info("Example: [command]shelley-bio find fastqc[/command]")
+            print_info("Usage: [command]shelley find <tool_name>[/command]")
+            print_info("Example: [command]shelley find fastqc[/command]")
         sys.exit(0)
 
     if command == "search":
@@ -78,8 +78,8 @@ def main() -> None:
             search_tools(" ".join(sys.argv[2:]))
         else:
             print_warning("Missing search terms")
-            print_info("Usage: [command]shelley-bio search <description>[/command]")
-            print_info("Example: [command]shelley-bio search 'quality control'[/command]")
+            print_info("Usage: [command]shelley search <description>[/command]")
+            print_info("Example: [command]shelley search 'quality control'[/command]")
         sys.exit(0)
 
     if command == "versions":
@@ -87,8 +87,8 @@ def main() -> None:
             versions_sync(sys.argv[2])
         else:
             print_warning("Missing tool name")
-            print_info("Usage: [command]shelley-bio versions <tool_name>[/command]")
-            print_info("Example: [command]shelley-bio versions samtools[/command]")
+            print_info("Usage: [command]shelley versions <tool_name>[/command]")
+            print_info("Example: [command]shelley versions samtools[/command]")
         sys.exit(0)
 
     if command == "interactive":
@@ -98,7 +98,7 @@ def main() -> None:
     console.print(ShelleyStyle.create_error_panel(
         "Unknown Command",
         f"Unknown command: '{command}'",
-        "Run shelley-bio --help for usage",
+        "Run shelley --help for usage",
     ))
     sys.exit(1)
 

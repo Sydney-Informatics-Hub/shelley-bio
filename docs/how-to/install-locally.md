@@ -26,16 +26,16 @@ uv --version
 `uv tool install` installs shelley into a uv-managed isolated environment and places the `shelley` executable on your PATH. No venv creation or activation is needed.
 
 ```bash
-uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley-bio
+uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley
 ```
 
 Verify:
 
 ```bash
-shelley-bio --help
+shelley --help
 ```
 
-If `shelley-bio` is not found, run:
+If `shelley` is not found, run:
 
 ```bash
 uv tool update-shell   # modifies ~/.bashrc / ~/.zshrc automatically
@@ -46,19 +46,19 @@ Then reopen your terminal or run `source ~/.bashrc`.
 To install a specific branch, append `@branch_name`:
 
 ```bash
-uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley-bio@branch_name
+uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley@branch_name
 ```
 
 ## Upgrade
 
 ```bash
-uv tool upgrade shelley-bio
+uv tool upgrade shelley
 ```
 
 ## Uninstall
 
 ```bash
-uv tool uninstall shelley-bio
+uv tool uninstall shelley
 ```
 
 ## Method comparison

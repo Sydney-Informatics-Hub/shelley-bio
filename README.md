@@ -1,8 +1,8 @@
-# Shelley Bio
+# Shelley
 
 **A bioinformatics tool finder and module builder for CVMFS-hosted containers on [BioShell](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
-Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
+Shelley helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
 ## Features
 
@@ -15,9 +15,9 @@ Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioC
 
 ### Installation
 
-`shelley-bio` ships with [BioShell](https://github.com/AustralianBioCommons/BioShell).
+`shelley` ships with [BioShell](https://github.com/AustralianBioCommons/BioShell).
 
-To install or update shelley-bio manually:
+To install or update shelley manually:
 
 | Goal | Guide |
 |---|---|
@@ -29,22 +29,22 @@ To install or update shelley-bio manually:
 
 ```bash
 # Find a specific tool
-shelley-bio find fastqc
+shelley find fastqc
 
 # Search by function (in development)
-shelley-bio search "quality control"
+shelley search "quality control"
 
 # List available versions
-shelley-bio versions samtools
+shelley versions samtools
 
 # Build an Lmod module
-shelley-bio build samtools
+shelley build samtools
 
 # Build a specific version
-shelley-bio build samtools/1.21
+shelley build samtools/1.21
 
 # Interactive mode
-shelley-bio interactive
+shelley interactive
 ```
 
 ## Documentation
@@ -65,10 +65,10 @@ shelley-bio interactive
 
 ## Architecture
 
-Shelley Bio is organised as a modular Python package:
+Shelley is organised as a modular Python package:
 
 ```
-shelley_bio/
+shelley/
 ├── client/          # CLI entry point (thin routing)
 ├── commands/        # One module per user-facing command
 ├── builder/         # CVMFS module building functionality
