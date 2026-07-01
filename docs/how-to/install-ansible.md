@@ -1,6 +1,6 @@
 # How to install shelley-bio via Ansible
 
-This guide describes the approach for deploying shelley-bio onto BioShell VMs via Ansible. The actual role implementation lives in the [BioShell repository](https://github.com/Sydney-Informatics-Hub/BioShell). This document contains a high-level overview and recommendations of steps to include when building the BioShell image.
+This guide describes recommendations for deploying shelley-bio onto BioShell VMs via Ansible. The actual role implementation lives in the [BioShell repository](https://github.com/Sydney-Informatics-Hub/BioShell).
 
 ## Overview
 
@@ -14,29 +14,36 @@ The recommended approach is to install `uv` on the target VM and then use `uv to
 
 1. **Install system prerequisites:** `python3`, `curl`, and `git` via the system package manager.
 
-2. **Install `uv`:** use the official installer script:
+2. **Install `uv`:** create `/opt/uv` first (the installer will not create it), then run the official installer script with `UV_INSTALL_DIR` pointing there:
+   ```bash
+   mkdir -p /opt/uv
+   curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/opt/uv sh
    ```
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-   Place the `uv` binary in a system-wide location (e.g. `/usr/local/bin/uv`) so all users can invoke it.
+   This places `uv` and `uvx` directly under `/opt/uv/`. In a Packer/Ansible context the provisioner runs as root so no `sudo` is needed.
 
-3. **Install `shelley`:** use `uv tool install` with a `--tool-dir` pointing to a stable system location such as `/opt/shelley`. This keeps the managed environment out of any user's home directory:
+3. **Add `/opt/uv` to the system PATH:** prepend it to the `PATH` line in `/etc/environment` so all users can invoke `uv`:
    ```
-   uv tool install \
-     "shelley @ git+https://github.com/Sydney-Informatics-Hub/shelley.git" \
-     --tool-dir /opt/shelley
+   PATH="/opt/uv:/usr/local/sbin:/usr/local/bin:..."
    ```
-   The `shelley` executable will be at `/opt/shelley/bin/shelley`.
 
-4. **Create a system-wide launcher:** place a minimal wrapper at `/usr/local/bin/shelley-bio` that delegates to the uv-managed binary. This makes the command available to all users regardless of their PATH. TODO: Provide an example. `uv run shelley` as `shelley`?
+4. **Install `shelley`:** set `UV_TOOL_DIR=/opt` so uv places the tool environment at `/opt/shelley-bio/` (uv appends the package name), and `UV_TOOL_BIN_DIR=/usr/local/bin` to place the executable alias where users can invoke it:
+   ```bash
+   UV_TOOL_DIR=/opt UV_TOOL_BIN_DIR=/usr/local/bin \
+     uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley-bio
+   ```
+   The tool environment goes to `/opt/shelley-bio/`. uv links the executable into `/usr/local/bin/shelley-bio`.
 
-5. **Validate:** confirm `/usr/local/bin/shelley --help` exits 0. TODO: what about 2&> dev/null?
+5. **Validate:** confirm the binary runs correctly:
+   ```bash
+   /usr/local/bin/shelley-bio --help
+   ```
+   Let stderr through — if the install failed, you want to see the error output, not suppress it.
 
 ## Key considerations
 
 **Python version**: uv selects or downloads a compatible Python 3.10+ interpreter without touching the system Python. The system `python3` is unaffected.
 
-**Multi-user VMs**: The installation under `/opt/shelley/` and the launcher at `/usr/local/bin/shelley` make shelley available to all users on the VM without any per-user setup.
+**Multi-user VMs**: Setting `UV_TOOL_DIR=/opt` and `UV_TOOL_BIN_DIR=/usr/local/bin` makes shelley available to all users on the VM without any per-user setup.
 
 ## References
 

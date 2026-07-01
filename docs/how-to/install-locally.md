@@ -1,6 +1,6 @@
-# How to install shelley-bio locally
+# How to install shelley locally
 
-This guide covers installing shelley-bio as a command-line tool on a Linux workstation or BioShell VM. No virtual environment activation is required.
+This guide covers installing shelley as a command-line tool on a Linux workstation or BioShell VM. No virtual environment activation is required.
 
 ## Prerequisites
 
@@ -11,7 +11,6 @@ Install `uv` if it is not already present:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.local/bin/env   # adds ~/.local/bin to PATH for the current shell
 ```
 
 Verify:
@@ -20,14 +19,14 @@ Verify:
 uv --version
 ```
 
-`uv` manages its own Python interpreter — it does not modify your system Python.
+`uv` manages its own Python interpreter and does not modify your system Python.
 
 ## Recommended method — `uv tool install`
 
-`uv tool install` installs shelley-bio into a uv-managed isolated environment and places the `shelley-bio` executable on your PATH. No venv creation or activation is needed.
+`uv tool install` installs shelley into a uv-managed isolated environment and places the `shelley` executable on your PATH. No venv creation or activation is needed.
 
 ```bash
-uv tool install "shelley-bio @ git+https://github.com/Sydney-Informatics-Hub/shelley-bio.git"
+uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley-bio
 ```
 
 Verify:
@@ -43,6 +42,12 @@ uv tool update-shell   # modifies ~/.bashrc / ~/.zshrc automatically
 ```
 
 Then reopen your terminal or run `source ~/.bashrc`.
+
+To install a specific branch, append `@branch_name`:
+
+```bash
+uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley-bio@branch_name
+```
 
 ## Upgrade
 
@@ -68,18 +73,18 @@ uv tool uninstall shelley-bio
 
 ### Why not pipx?
 
-`pipx` is the conventional venv-free installer for Python CLIs. It works for pure-PyPI packages, but shelley-bio depends on a specific branch of `container-guts` (from the [SIH guts fork](https://github.com/Sydney-Informatics-Hub/guts.git)) that is not available on PyPI. `pipx` has no equivalent of uv's `[tool.uv.sources]` override, so it cannot inject the correct git source at install time.
+`pipx` is the conventional venv-free installer for Python CLIs. It works for pure-PyPI packages, but shelley depends on a specific branch of `container-guts` (from the [SIH guts fork](https://github.com/Sydney-Informatics-Hub/guts.git)) that is not available on PyPI. `pipx` has no equivalent of uv's `[tool.uv.sources]` override, so it cannot inject the correct git source at install time.
 
 ### Why not conda?
 
-shelley-bio is not packaged for conda-forge or bioconda. A conda environment still requires activation, so it does not meet the no-venv goal.
+shelley is not packaged for conda-forge or bioconda. A conda environment still requires activation, so it does not meet the no-venv goal.
 
 ## Python version
 
-`uv tool install` creates a sandboxed Python environment that does not affect your system Python. shelley-bio requires Python 3.10 or later; uv selects the highest compatible version it can find or downloads one automatically if none is present.
+`uv tool install` creates a sandboxed Python environment that does not affect your system Python. shelley requires Python 3.10 or later; uv selects the highest compatible version it can find or downloads one automatically if none is present.
 
-To pin a specific interpreter:
+To pin a specific version:
 
 ```bash
-uv tool install "shelley-bio @ git+..." --python 3.11
+uv tool install "git+..." --python 3.11
 ```
