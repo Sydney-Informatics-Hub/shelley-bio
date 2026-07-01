@@ -1,19 +1,19 @@
 # Data sources reference
 
-Technical facts about every data artifact shelley-bio bundles or reads at runtime.
+Technical facts about every data artifact shelley bundles or reads at runtime.
 
 ---
 
 ## Key paths
 
-Paths involved in a `shelley-bio build` run, in the order they are touched:
+Paths involved in a `shelley build` run, in the order they are touched:
 
 | Path | Written by | Why it matters |
 |---|---|---|
-| `/cvmfs/singularity.galaxyproject.org/all/` | Galaxy Project (read-only) | Source SIF files; `shelley-bio build` reads from here, never writes |
-| `/apps/local/` | `shelley-bio build` | Local shpc registry: `container.yaml` files for tool versions **absent** from the upstream shpc-registry |
+| `/cvmfs/singularity.galaxyproject.org/all/` | Galaxy Project (read-only) | Source SIF files; `shelley build` reads from here, never writes |
+| `/apps/local/` | `shelley build` | Local shpc registry: `container.yaml` files for tool versions **absent** from the upstream shpc-registry |
 | `/apps/shpc/` | shpc | shpc install base; contains `modules/` (generated `module.lua` + wrapper scripts) and `containers/` |
-| `/apps/Modules/modulefiles/<tool>/<version>.lua` | `shelley-bio build` | Symlink into `/apps/shpc/modules/`; what `module avail` and `module load <tool>/<version>` resolves |
+| `/apps/Modules/modulefiles/<tool>/<version>.lua` | `shelley build` | Symlink into `/apps/shpc/modules/`; what `module avail` and `module load <tool>/<version>` resolves |
 
 ---
 
@@ -52,7 +52,7 @@ Field coverage across 714 entries (measured 2026-06-02):
 | `edam-outputs` | 19.6 % |
 
 ```bash
-python3 shelley_bio/scripts/assess_coverage.py toolfinder
+python3 shelley/scripts/assess_coverage.py toolfinder
 ```
 
 ---
@@ -103,10 +103,10 @@ Field coverage across 34,130 entries (RSEC commit `7ac28185`):
 
 ```bash
 # From committed artifact (no network):
-python3 shelley_bio/scripts/assess_coverage.py rsec
+python3 shelley/scripts/assess_coverage.py rsec
 
 # From upstream (re-fetches, ~90 s):
-shelley-bio-build-rsec --assess
+shelley-build-rsec --assess
 ```
 
 ### Per-tool field coverage — regression tools
@@ -138,7 +138,7 @@ Notable absences:
 - **star-fusion** — indexed as `star_fusion` (underscore) in toolfinder.
 
 ```bash
-python3 shelley_bio/scripts/assess_regression_tools.py
+python3 shelley/scripts/assess_regression_tools.py
 ```
 
 ---
@@ -171,7 +171,7 @@ Top-level structure:
 
 ---
 
-## `shelley_bio/data/guts_db/` — supplementary guts manifests
+## `shelley/data/guts_db/` — supplementary guts manifests
 
 Singularity manifests used at build time to subtract conda infrastructure from tool alias detection. See [docs/explanation/build-design.md](../explanation/build-design.md) for the reasoning.
 
@@ -186,7 +186,7 @@ Current manifests:
 
 ## Regression tool matrix
 
-Canonical regression set for `shelley-bio build`. Verified by `test_ensure_local_registry_entry_newly_created` and `test_ensure_local_registry_entry_upstream_known` in `tests/test_cvmfs_builder.py`.
+Canonical regression set for `shelley build`. Verified by `test_ensure_local_registry_entry_newly_created` and `test_ensure_local_registry_entry_upstream_known` in `tests/test_cvmfs_builder.py`.
 
 | Tool | Canonical version (CVMFS) | In upstream registry | newly_created | Key aliases |
 |---|---|---|---|---|
@@ -213,7 +213,7 @@ Canonical regression set for `shelley-bio build`. Verified by `test_ensure_local
 
 ### `shpc` must be on PATH
 
-All `shelley-bio build` operations and CVMFS integration tests call `shpc` as a subprocess. `shpc` is installed at `/opt/shpc/bin/shpc` and is not on the default PATH:
+All `shelley build` operations and CVMFS integration tests call `shpc` as a subprocess. `shpc` is installed at `/opt/shpc/bin/shpc` and is not on the default PATH:
 
 ```bash
 module load shpc

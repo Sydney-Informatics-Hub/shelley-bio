@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from shelley_bio.search.rsec import RsecSource, RSEC_DATA_PATH
+from shelley.search.rsec import RsecSource, RSEC_DATA_PATH
 
 
 # Plain string list format — matches what rsec_meta.json.gz actually contains

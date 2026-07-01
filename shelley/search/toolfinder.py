@@ -12,8 +12,8 @@ from typing import Optional
 
 import yaml
 
-from shelley_bio.utils.globals import DATA_DIR
-from shelley_bio.search.base import MetadataSource
+from shelley.utils.globals import DATA_DIR
+from shelley.search.base import MetadataSource
 
 TOOLFINDER_DATA_PATH = DATA_DIR / "toolfinder_meta.yaml"
 

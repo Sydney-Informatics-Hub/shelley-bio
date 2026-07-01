@@ -20,14 +20,14 @@ def build_module(tool_spec: str) -> bool:
     needs_sudo = not os.access(module_dir, os.W_OK) if module_dir.exists() else True
 
     if needs_sudo:
-        # Re-invoke with sudo, preserving the PATH so the shelley-bio script is found.
-        # TODO: replace with shutil.which('shelley-bio') for robustness.
+        # Re-invoke with sudo, preserving the PATH so the shelley script is found.
+        # TODO: replace with shutil.which('shelley') for robustness.
         script_dir = Path(__file__).parent.parent.parent
-        shelley_bio_path = script_dir / "bin" / "shelley-bio"
+        shelley_path = script_dir / "bin" / "shelley"
 
         cmd = [
             "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
-            str(shelley_bio_path), "build", tool_spec,
+            str(shelley_path), "build", tool_spec,
         ]
 
         try:

@@ -18,7 +18,7 @@ def versions_sync(tool_name: str) -> None:
         console.print(ShelleyStyle.create_error_panel(
             "Cache Not Found",
             "galaxy_singularity_cache.json.gz is missing.",
-            "Run: shelley-bio-build-cache",
+            "Run: shelley-build-cache",
         ))
         return
 
@@ -26,7 +26,7 @@ def versions_sync(tool_name: str) -> None:
         console.print(ShelleyStyle.create_error_panel(
             "No Versions Found",
             f"No containers found for '{tool_name}'.",
-            "Check the tool name spelling or try: shelley-bio find " + tool_name,
+            "Check the tool name spelling or try: shelley find " + tool_name,
         ))
         return
 
@@ -45,7 +45,7 @@ def versions_sync(tool_name: str) -> None:
         )
     console.print(Panel(
         f"To install the latest version of {tool_name}, run:\n\n"
-        f"[command]shelley-bio build {tool_name}[/command]",
+        f"[command]shelley build {tool_name}[/command]",
         title="[header]Install[/header]",
         box=ROUNDED,
         border_style="info",

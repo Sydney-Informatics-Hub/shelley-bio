@@ -1,6 +1,6 @@
 #TODO: This was the initial code to build the now deprecated
 # toolfinder cache. In future, delete this or refactor into
-# shelley_bio.scripts, similar to how rsec cache was generated
+# shelley.scripts, similar to how rsec cache was generated
 from __future__ import annotations
 
 import gzip
@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, TypedDict
-from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH
+from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH
 
 # Schema for cache entries, for consistency
 class CacheEntry(TypedDict):

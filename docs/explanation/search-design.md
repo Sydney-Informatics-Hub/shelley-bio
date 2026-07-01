@@ -4,7 +4,7 @@ Why search is designed the way it is. For field schemas and coverage numbers, se
 
 ## Why RSEC over toolfinder as the default search source
 
-shelley-bio has two metadata corpora: `toolfinder_meta.yaml` (AustralianBioCommons) and `rsec_meta.json.gz` (Research Software Ecosystem). RSEC is the default for `search` because its EDAM coverage is substantially higher:
+shelley has two metadata corpora: `toolfinder_meta.yaml` (AustralianBioCommons) and `rsec_meta.json.gz` (Research Software Ecosystem). RSEC is the default for `search` because its EDAM coverage is substantially higher:
 
 | Field | toolfinder | RSEC bio.tools |
 |---|---|---|
@@ -13,7 +13,7 @@ shelley-bio has two metadata corpora: `toolfinder_meta.yaml` (AustralianBioCommo
 | edam-operations | 69.7 % | 91.6 % |
 | edam-topics | 69.7 % | 95.0 % |
 
-Before searching, the 34,130 RSEC entries are filtered to only those with a matching container in the CVMFS cache (`galaxy_singularity_cache.json.gz`). This means every result returned by `search` can be installed immediately with `shelley-bio build`. The effective search corpus is the intersection of bio.tools metadata and CVMFS-hosted containers.
+Before searching, the 34,130 RSEC entries are filtered to only those with a matching container in the CVMFS cache (`galaxy_singularity_cache.json.gz`). This means every result returned by `search` can be installed immediately with `shelley build`. The effective search corpus is the intersection of bio.tools metadata and CVMFS-hosted containers.
 
 The CVMFS filter runs at search time rather than being pre-computed. The two artifacts (`rsec_meta.json.gz` and `galaxy_singularity_cache.json.gz`) update independently — a pre-filtered artifact would require coordinating both rebuild steps. Runtime cost is low (a list comprehension over ~34K entries), so runtime filtering is preferable for now.
 

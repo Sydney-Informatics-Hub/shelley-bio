@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Build the RSEC bio.tools metadata artifact for shelley-bio search.
+Build the RSEC bio.tools metadata artifact for shelley search.
 
 Fetches *.biotools.json files from the research-software-ecosystem/content
 GitHub repository, parses them into the rsec_meta.json.gz artifact consumed
-by shelley-bio search.
+by shelley search.
 
 Usage:
-    shelley-bio-build-rsec [options]
-    python -m shelley_bio.scripts.build_rsec_meta [options]
+    shelley-build-rsec [options]
+    python -m shelley.scripts.build_rsec_meta [options]
 
 Options:
     --assess          Print field-coverage report and exit without writing
     --method          sparse-clone (default) or tarball
     --ref             Branch/tag to fetch (default: master)
-    --out             Output path (default: shelley_bio/data/rsec_meta.json.gz)
+    --out             Output path (default: shelley/data/rsec_meta.json.gz)
     --workdir         Persistent temp directory (auto by default)
     -v/--verbose      Debug logging
 """
@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from shelley_bio.utils.globals import DATA_DIR
+from shelley.utils.globals import DATA_DIR
 
 log = logging.getLogger("build-rsec-meta")
 
@@ -261,7 +261,7 @@ def _print_assessment(entries: list[dict], coverage: dict[str, float]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build RSEC bio.tools metadata artifact for shelley-bio search."
+        description="Build RSEC bio.tools metadata artifact for shelley search."
     )
     parser.add_argument(
         "--repo-url", default=REPO_URL,

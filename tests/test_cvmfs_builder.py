@@ -12,8 +12,8 @@ import pytest
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from shelley_bio.builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
-from shelley_bio.commands.build import build_module
+from shelley.builder.cvmfs_builder import CVMFSModuleBuilder, get_registry_tags
+from shelley.commands.build import build_module
 
 # ---------------------------------------------------------------------------
 # Shared fixtures and helpers
@@ -60,7 +60,7 @@ def test_shpc_is_executable():
 def test_shpc_on_path():
     """shpc must be on PATH for all build operations. Fix: module load shpc"""
     assert shutil.which("shpc") is not None, (
-        "shpc not found on PATH, run 'module load shpc' before using shelley-bio build "
+        "shpc not found on PATH, run 'module load shpc' before using shelley build "
         "or running the CVMFS integration tests."
     )
 
@@ -77,7 +77,7 @@ def test_shpc_on_path():
 def test_search_tool_version_multiplebuilds(builder, tool_name, tool_version):
     # Both of these versions have multiple builds; interactive selection should be triggered.
     # Mock questionary so the test runs headlessly.
-    with patch("shelley_bio.builder.cvmfs_builder.questionary") as mock_q:
+    with patch("shelley.builder.cvmfs_builder.questionary") as mock_q:
         available = builder._get_available_tools(tool_name)
         matches = [
             (t, v) for t, v in available
@@ -146,9 +146,9 @@ def test_shpc_install_success(builder, tmp_path):
     src.parent.mkdir(parents=True)
     src.touch()
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags",
+         patch("shelley.builder.cvmfs_builder.get_registry_tags",
                return_value={version}), \
          patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
@@ -193,8 +193,8 @@ def test_shpc_install_retries_after_uninstall(builder, tmp_path):
                 m.stdout = "Module was created.\n"
         return m
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value={version}):
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value={version}):
         dest = builder.shpc_install(tool, version)
 
     assert install_calls["n"] == 2
@@ -207,10 +207,10 @@ def test_shpc_install_hard_failure_raises(builder, tmp_path):
     shpc_base = tmp_path / "shpc_modules"
     version = "1.21--h96c455f_1"
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base, install_rc=1,
                                                 install_out="Unexpected shpc error")), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value={version}):
+         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value={version}):
         with pytest.raises(RuntimeError, match="shpc install failed"):
             builder.shpc_install("samtools", version)
 
@@ -237,11 +237,11 @@ def mock_builder_cls(tmp_path):
     fake_builder.shpc_install.return_value = tmp_path / "samtools" / "dummy.lua"
     fake_builder.list_versions.return_value = [v for _, v in FAKE_VERSIONS]
 
-    with patch("shelley_bio.commands.build.CVMFSModuleBuilder", return_value=fake_builder), \
+    with patch("shelley.commands.build.CVMFSModuleBuilder", return_value=fake_builder), \
          patch("pathlib.Path.exists", return_value=True), \
          patch("os.access", return_value=True), \
-         patch("shelley_bio.commands.build.ShelleyStyle.create_status") as mock_status, \
-         patch("shelley_bio.commands.build.console"):
+         patch("shelley.commands.build.ShelleyStyle.create_status") as mock_status, \
+         patch("shelley.commands.build.console"):
         mock_status.return_value.__enter__ = MagicMock(return_value=None)
         mock_status.return_value.__exit__ = MagicMock(return_value=False)
         yield fake_builder
@@ -278,8 +278,8 @@ def test_build_full_tag(mock_builder_cls):
 def test_ensure_local_registry_populates_aliases_on_miss(builder, tmp_path):
     """When upstream registry returns 404, aliases are populated via guts diff."""
     fake_aliases = [{"name": "bwa", "command": "bwa"}]
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run") as mock_run, \
-         patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
+    with patch("shelley.builder.cvmfs_builder.subprocess.run") as mock_run, \
+         patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
          patch.object(builder, "_compute_sha256", return_value="abc123"):
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
         builder._ensure_local_registry_entry(
@@ -309,8 +309,8 @@ def test_ensure_local_registry_always_regenerates_aliases(builder, tmp_path):
     (registry_dir / "container.yaml").write_text(
         f"docker: quay.io/biocontainers/samtools\naliases: {stale_aliases}\ntags: {{}}\n"
     )
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run") as mock_run, \
-         patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
+    with patch("shelley.builder.cvmfs_builder.subprocess.run") as mock_run, \
+         patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=fake_aliases), \
          patch.object(builder, "_compute_sha256", return_value="abc123"):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         builder._ensure_local_registry_entry(
@@ -326,8 +326,8 @@ def test_ensure_local_registry_always_regenerates_aliases(builder, tmp_path):
 
 def test_extract_aliases_returns_empty_on_failure():
     """extract_aliases degrades gracefully when the sparse clone or diff fails."""
-    from shelley_bio.builder.guts_integration import extract_aliases
-    with patch("shelley_bio.builder.guts_integration._sparse_clone_base_manifests",
+    from shelley.builder.guts_integration import extract_aliases
+    with patch("shelley.builder.guts_integration._sparse_clone_base_manifests",
                side_effect=subprocess.CalledProcessError(1, "git")):
         result = extract_aliases("/cvmfs/foo/bar:1.0")
     assert result == []
@@ -341,9 +341,9 @@ def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
     src.parent.mkdir(parents=True)
     src.touch()
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run",
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags",
+         patch("shelley.builder.cvmfs_builder.get_registry_tags",
                return_value={version}), \
          patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
@@ -393,10 +393,10 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
 
     expected_cvmfs = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
          patch.object(builder, "_ensure_local_registry_entry", side_effect=wrapped_ensure), \
-         patch("shelley_bio.builder.cvmfs_builder.extract_aliases",
+         patch("shelley.builder.cvmfs_builder.extract_aliases",
                return_value=fake_aliases) as mock_extract, \
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
         dest = builder.shpc_install(tool, version)
@@ -440,8 +440,8 @@ def test_shpc_install_creates_local_entry_when_not_in_upstream(builder, tmp_path
     def fake_ensure(*args, **kwargs):
         call_order.append("ensure")
 
-    with patch("shelley_bio.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley_bio.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
+         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
          patch.object(builder, "_ensure_local_registry_entry", side_effect=fake_ensure), \
          patch.object(builder, "_register_local_registry"):
         dest = builder.shpc_install(tool, version)
@@ -464,7 +464,7 @@ def test_extract_aliases_star_fusion_1_0_0():
     """
     if shutil.which("singularity") is None:
         pytest.skip("singularity not on PATH")
-    from shelley_bio.builder.guts_integration import extract_aliases
+    from shelley.builder.guts_integration import extract_aliases
     sif = "/cvmfs/singularity.galaxyproject.org/all/star-fusion:1.0.0--pl5.22.0_0"
     aliases = extract_aliases(sif)
     alias_names = {a["name"] for a in aliases}
@@ -490,7 +490,7 @@ _CVMFS = "/cvmfs/singularity.galaxyproject.org/all"
 ])
 def test_ensure_local_registry_entry_newly_created(builder, tmp_path, tool, version):
     """Tools absent from upstream registry: _ensure_local_registry_entry writes the YAML tag."""
-    with patch("shelley_bio.builder.cvmfs_builder.extract_aliases", return_value=[]), \
+    with patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=[]), \
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
         builder._ensure_local_registry_entry(
             tool, version, f"{_CVMFS}/{tool}:{version}",

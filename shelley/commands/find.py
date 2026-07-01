@@ -57,7 +57,7 @@ def find_tool_sync(tool_name: str) -> None:
             "available": True,
             "recent_versions": unique_versions[:5],
             "total_versions": len(unique_versions),
-            "install_command": f"shelley-bio build {tool_id}",
+            "install_command": f"shelley build {tool_id}",
         }
 
     tool_payload = None
@@ -98,7 +98,7 @@ def _render_find_tool(payload: dict) -> None:
             console.print(ShelleyStyle.create_error_panel(
                 "Tool Not Found",
                 f"No tool or container matching '{query}' was found.",
-                "Try: shelley-bio search <description>",
+                "Try: shelley search <description>",
             ))
         return
 
@@ -158,7 +158,7 @@ def _render_find_tool(payload: dict) -> None:
             table.add_row(
                 f"[muted]+ {total - shown} more[/muted]",
                 "",
-                f"[muted]shelley-bio versions {query}[/muted]",
+                f"[muted]shelley versions {query}[/muted]",
             )
 
         console.print(table)
@@ -172,7 +172,7 @@ def _render_find_tool(payload: dict) -> None:
 
         console.print(Panel(
             f"To install the latest version of {title_name}, run:\n\n"
-            f"[command]shelley-bio build {query}[/command]",
+            f"[command]shelley build {query}[/command]",
             title="[header]Install[/header]",
             box=ROUNDED,
             border_style="info",

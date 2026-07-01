@@ -15,9 +15,9 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
-from shelley_bio.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
-from shelley_bio.utils import console, ShelleyStyle
-from shelley_bio.builder.guts_integration import extract_aliases
+from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
+from shelley.utils import console, ShelleyStyle
+from shelley.builder.guts_integration import extract_aliases
 
 log = logging.getLogger(__name__)
 

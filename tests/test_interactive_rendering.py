@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-from shelley_bio.utils.style import ShelleyStyle, console, print_banner, print_rule
+from shelley.utils.style import ShelleyStyle, console, print_banner, print_rule
 
 def test_interactive_rendering():
     """Test the interactive mode rendering without MCP server."""
@@ -29,7 +29,7 @@ def test_interactive_rendering():
     console.print(help_table)
     print_rule()
     
-    console.print("\n[prompt]shelley-bio>[/prompt] ")
+    console.print("\n[prompt]shelley>[/prompt] ")
 
 if __name__ == "__main__":
     test_interactive_rendering()

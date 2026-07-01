@@ -4,8 +4,8 @@ import gzip
 import json
 import re
 
-from shelley_bio.utils.globals import DATA_DIR
-from shelley_bio.builder.cvmfs_builder import get_registry_tags
+from shelley.utils.globals import DATA_DIR
+from shelley.builder.cvmfs_builder import get_registry_tags
 
 
 def load_cvmfs_tool_ids() -> set[str] | None:

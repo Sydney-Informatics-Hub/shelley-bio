@@ -1,8 +1,8 @@
-# Shelley Bio
+# Shelley
 
 **A bioinformatics tool finder and module builder for CVMFS-hosted containers on [BioShell](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
-Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
+Shelley helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
 ## Features
 
@@ -15,30 +15,36 @@ Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioC
 
 ### Installation
 
-`shelley-bio` is installed as part of [BioShell](https://github.com/AustralianBioCommons/BioShell).
+`shelley` ships with [BioShell](https://github.com/AustralianBioCommons/BioShell).
 
-For development instructions, see [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md).
+To install or update shelley manually:
+
+| Goal | Guide |
+|---|---|
+| Install on a workstation or VM | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) |
+| Deploy via Ansible (BioShell) | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) |
+| Developer environment | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) |
 
 ### Basic Usage
 
 ```bash
 # Find a specific tool
-shelley-bio find fastqc
+shelley find fastqc
 
 # Search by function (in development)
-shelley-bio search "quality control"
+shelley search "quality control"
 
 # List available versions
-shelley-bio versions samtools
+shelley versions samtools
 
 # Build an Lmod module
-shelley-bio build samtools
+shelley build samtools
 
 # Build a specific version
-shelley-bio build samtools/1.21
+shelley build samtools/1.21
 
 # Interactive mode
-shelley-bio interactive
+shelley interactive
 ```
 
 ## Documentation
@@ -46,6 +52,8 @@ shelley-bio interactive
 | Type | File | What it covers |
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
+| How-to | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) | Install without a venv |
+| How-to | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) | Ansible deployment for BioShell VMs |
 | How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
@@ -57,10 +65,10 @@ shelley-bio interactive
 
 ## Architecture
 
-Shelley Bio is organised as a modular Python package:
+Shelley is organised as a modular Python package:
 
 ```
-shelley_bio/
+shelley/
 ├── client/          # CLI entry point (thin routing)
 ├── commands/        # One module per user-facing command
 ├── builder/         # CVMFS module building functionality
