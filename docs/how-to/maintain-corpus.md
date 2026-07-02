@@ -7,21 +7,21 @@ Steps for keeping the bundled data files up to date. For the rationale behind wh
 The RSEC search corpus is built from the [research-software-ecosystem/content](https://github.com/research-software-ecosystem/content) repository. Regenerate after upstream updates:
 
 ```bash
-# From the repo root, with uv venv active:
-shelley-build-rsec
+# From the repo root:
+uv run shelley-build-rsec
 ```
 
 This sparse-clones `data/` from the RSEC repo (~90 s), parses every `*.biotools.json` file, and writes `shelley/data/rsec_meta.json.gz`.
 
 ```bash
 # Force tarball download instead of sparse clone:
-shelley-build-rsec --method tarball
+uv run shelley-build-rsec --method tarball
 
 # Check field-coverage statistics without writing anything:
-shelley-build-rsec --assess
+uv run shelley-build-rsec --assess
 
 # Fetch a specific branch/tag:
-shelley-build-rsec --ref main
+uv run shelley-build-rsec --ref main
 ```
 
 After regenerating:

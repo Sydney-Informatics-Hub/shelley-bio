@@ -8,6 +8,9 @@ This tutorial walks you through finding and installing a bioinformatics tool on 
 - `shelley` is already installed (it ships with BioShell)
 - CVMFS is mounted at `/cvmfs/singularity.galaxyproject.org/`
 
+If `shelley` is not yet installed (for example, on a VM not yet baked with it),
+see [../how-to/install.md](../how-to/install.md).
+
 Verify your setup:
 
 ```bash

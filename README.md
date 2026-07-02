@@ -21,8 +21,7 @@ To install or update shelley manually:
 
 | Goal | Guide |
 |---|---|
-| Install on a workstation or VM | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) |
-| Deploy via Ansible (BioShell) | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) |
+| Install/update on a workstation, VM, or BioShell image | [docs/how-to/install.md](docs/how-to/install.md) |
 | Developer environment | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) |
 
 ### Basic Usage
@@ -52,14 +51,14 @@ shelley interactive
 | Type | File | What it covers |
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
-| How-to | [docs/how-to/install-locally.md](docs/how-to/install-locally.md) | Install without a venv |
-| How-to | [docs/how-to/install-ansible.md](docs/how-to/install-ansible.md) | Ansible deployment for BioShell VMs |
+| How-to | [docs/how-to/install.md](docs/how-to/install.md) | Install/update on a VM or BioShell image |
 | How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
 | How-to | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) | Dev environment and tests |
 | Reference | [docs/reference/cli.md](docs/reference/cli.md) | All CLI commands |
 | Reference | [docs/reference/data-sources.md](docs/reference/data-sources.md) | Data artifacts and schemas |
+| Explanation | [docs/explanation/install-design.md](docs/explanation/install-design.md) | Why shelley installs with uv |
 | Explanation | [docs/explanation/search-design.md](docs/explanation/search-design.md) | Why the search is designed this way |
 | Explanation | [docs/explanation/build-design.md](docs/explanation/build-design.md) | Why the build is designed this way |
 

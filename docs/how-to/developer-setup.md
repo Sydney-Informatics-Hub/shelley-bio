@@ -4,11 +4,9 @@
 
 The project uses [uv](https://github.com/astral-sh/uv) for dependency management.
 
-Install `uv` if not already present:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+Development is generally done on BioShell, so install `uv` system-wide into `/opt/uv` if it
+is not already present. See [Install `uv`](install.md#install-uv-system-wide) in
+the install guide.
 
 ```bash
 # 1. Clone the repository
@@ -28,7 +26,7 @@ uv run pytest --collect-only   # confirm pytest is installed; do not run yet
 
 > **No venv activation needed.** `uv sync` creates a managed `.venv` automatically. Run all commands through `uv run` — you never need to activate the environment manually.
 
-> **Why `uv` and not plain `pip`?** `pyproject.toml` declares `container-guts` as a git source dependency (`[tool.uv.sources]`). Plain `pip install -e .` ignores this table and tries to pull `container-guts` from PyPI, which is missing the Singularity support shelley requires.
+> **Why `uv` and not plain `pip`?** See [../explanation/install-design.md](../explanation/install-design.md).
 
 ## Keeping the environment up to date
 
