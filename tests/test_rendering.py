@@ -9,7 +9,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from shelley_bio.utils.style import ShelleyStyle, console, print_banner, print_rule
+from shelley.utils.style import ShelleyStyle, console, print_banner, print_rule
 
 def test_interactive_display():
     """Show the improved interactive mode display."""
@@ -32,7 +32,7 @@ def test_interactive_display():
     console.print(help_table)
     print_rule()
     
-    console.print("\n🧬 [prompt]shelley-bio>[/prompt] [dim](Clean rendering test successful!)[/dim]")
+    console.print("\n🧬 [prompt]shelley>[/prompt] [dim](Clean rendering test successful!)[/dim]")
     console.print("\n[success]✓ Banner now uses clean Panel instead of Unicode box drawing[/success]")
     console.print("[success]✓ Command table shows proper brackets without escaping[/success]")
     console.print("[success]✓ cvmfs-list shows full container paths instead of Available status[/success]")

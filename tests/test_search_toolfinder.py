@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from shelley_bio.search.toolfinder import ToolfinderSource, TOOLFINDER_DATA_PATH
+from shelley.search.toolfinder import ToolfinderSource, TOOLFINDER_DATA_PATH
 
 
 # Nested dict format — matches what toolfinder_meta.yaml actually contains

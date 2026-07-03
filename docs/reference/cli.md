@@ -1,9 +1,9 @@
 # CLI reference
 
-Complete reference for all `shelley-bio` commands.
+Complete reference for all `shelley` commands.
 
 ```
-shelley-bio <command> [args]
+shelley <command> [args]
 ```
 
 ---
@@ -11,7 +11,7 @@ shelley-bio <command> [args]
 ## `find`
 
 ```bash
-shelley-bio find <tool_name>
+shelley find <tool_name>
 ```
 
 | Argument | Type | Required |
@@ -27,7 +27,7 @@ Looks up a tool by name. Case-insensitive; handles hyphen/underscore variants. M
 ## `search`
 
 ```bash
-shelley-bio search <query>
+shelley search <query>
 ```
 
 | Argument | Type | Required |
@@ -45,7 +45,7 @@ Keyword search across tool metadata. Matches on name, description, EDAM operatio
 ## `versions`
 
 ```bash
-shelley-bio versions <tool_name>
+shelley versions <tool_name>
 ```
 
 | Argument | Type | Required |
@@ -61,7 +61,7 @@ Lists every available container version for a tool, sorted newest-first.
 ## `build`
 
 ```bash
-shelley-bio build <tool_spec>
+shelley build <tool_spec>
 ```
 
 | Argument | Type | Required | Format |
@@ -81,7 +81,7 @@ Requires `shpc` on PATH and CVMFS mounted.
 ## `interactive`
 
 ```bash
-shelley-bio interactive
+shelley interactive
 ```
 
 Starts a REPL session. Available commands inside the REPL:

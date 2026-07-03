@@ -7,32 +7,32 @@ This guide covers the three read-only commands: `find`, `search`, and `versions`
 Use `find` when you know the tool's name.
 
 ```bash
-shelley-bio find fastqc
-shelley-bio find STAR          # case-insensitive
-shelley-bio find bwa-mem2      # hyphens and underscores handled automatically
+shelley find fastqc
+shelley find STAR          # case-insensitive
+shelley find bwa-mem2      # hyphens and underscores handled automatically
 ```
 
 **Returns:**
 - Tool description, homepage, and EDAM operations
 - A table of recent container versions with buildable status and install state
-- An install prompt with the `shelley-bio build` command
+- An install prompt with the `shelley build` command
 
-If no exact match is found, shelley-bio suggests close alternatives.
+If no exact match is found, shelley suggests close alternatives.
 
-> **Note:** `find` is case-insensitive. `shelley-bio find Arriba` and `shelley-bio find arriba` return the same result.
+> **Note:** `find` is case-insensitive. `shelley find Arriba` and `shelley find arriba` return the same result.
 
 ## Search by function — `search`
 
 Use `search` when you know what you want to do but not which tool does it.
 
 ```bash
-shelley-bio search "quality control"
-shelley-bio search "variant calling"
-shelley-bio search "genome assembly"
-shelley-bio search "adapter trimming"
+shelley search "quality control"
+shelley search "variant calling"
+shelley search "genome assembly"
+shelley search "adapter trimming"
 ```
 
-**Returns:** A list of matching tool names sorted alphabetically, each with a `shelley-bio find <name>` command to get full details. Results are filtered to tools that have a container available on CVMFS, so every result can be installed directly with `shelley-bio build`.
+**Returns:** A list of matching tool names sorted alphabetically, each with a `shelley find <name>` command to get full details. Results are filtered to tools that have a container available on CVMFS, so every result can be installed directly with `shelley build`.
 
 ### Tips for better results
 
@@ -63,9 +63,9 @@ For the design rationale behind these limitations, see [docs/explanation/search-
 Use `versions` to see every available container for a tool, sorted newest-first.
 
 ```bash
-shelley-bio versions samtools
-shelley-bio versions bwa
-shelley-bio versions gatk
+shelley versions samtools
+shelley versions bwa
+shelley versions gatk
 ```
 
 **Returns:** Every available version with buildable status (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback); an install prompt.

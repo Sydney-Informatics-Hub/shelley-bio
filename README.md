@@ -1,8 +1,8 @@
-# Shelley Bio
+# Shelley
 
 **A bioinformatics tool finder and module builder for CVMFS-hosted containers on [BioShell](https://github.com/Sydney-Informatics-Hub/bioimage)**
 
-Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
+Shelley helps researchers using [BioShell](https://github.com/AustralianBioCommons/BioShell) virtual machine images on Nectar research cloud platforms discover, query, and deploy bioinformatics software from CVMFS (CernVM File System) repositories. It provides both interactive and programmatic interfaces for finding tools, building Lmod modules, and managing containerised workflows.
 
 ## Features
 
@@ -15,30 +15,35 @@ Shelley-bio helps researchers using [BioShell](https://github.com/AustralianBioC
 
 ### Installation
 
-`shelley-bio` is installed as part of [BioShell](https://github.com/AustralianBioCommons/BioShell).
+`shelley` ships with [BioShell](https://github.com/AustralianBioCommons/BioShell).
 
-For development instructions, see [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md).
+To install or update shelley manually:
+
+| Goal | Guide |
+|---|---|
+| Install/update on a workstation, VM, or BioShell image | [docs/how-to/install.md](docs/how-to/install.md) |
+| Developer environment | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) |
 
 ### Basic Usage
 
 ```bash
 # Find a specific tool
-shelley-bio find fastqc
+shelley find fastqc
 
 # Search by function (in development)
-shelley-bio search "quality control"
+shelley search "quality control"
 
 # List available versions
-shelley-bio versions samtools
+shelley versions samtools
 
 # Build an Lmod module
-shelley-bio build samtools
+shelley build samtools
 
 # Build a specific version
-shelley-bio build samtools/1.21
+shelley build samtools/1.21
 
 # Interactive mode
-shelley-bio interactive
+shelley interactive
 ```
 
 ## Documentation
@@ -46,21 +51,23 @@ shelley-bio interactive
 | Type | File | What it covers |
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
+| How-to | [docs/how-to/install.md](docs/how-to/install.md) | Install/update on a VM or BioShell image |
 | How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
 | How-to | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) | Dev environment and tests |
 | Reference | [docs/reference/cli.md](docs/reference/cli.md) | All CLI commands |
 | Reference | [docs/reference/data-sources.md](docs/reference/data-sources.md) | Data artifacts and schemas |
+| Explanation | [docs/explanation/install-design.md](docs/explanation/install-design.md) | Why shelley installs with uv |
 | Explanation | [docs/explanation/search-design.md](docs/explanation/search-design.md) | Why the search is designed this way |
 | Explanation | [docs/explanation/build-design.md](docs/explanation/build-design.md) | Why the build is designed this way |
 
 ## Architecture
 
-Shelley Bio is organised as a modular Python package:
+Shelley is organised as a modular Python package:
 
 ```
-shelley_bio/
+shelley/
 ├── client/          # CLI entry point (thin routing)
 ├── commands/        # One module per user-facing command
 ├── builder/         # CVMFS module building functionality
@@ -75,3 +82,24 @@ shelley_bio/
 - Access to CVMFS repositories (typically `/cvmfs/singularity.galaxyproject.org/`)
 - Lmod (for module management)
 - Singularity/Apptainer (for container execution)
+
+## License
+
+Copyright (C) 2026 Frederick Jaya, Mitchell O'Brien, Georgie Samaha.
+
+shelley is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for the full text.
+
+## Acknowledgements
+
+This project was completed as part of the BioCLI project, supported by the
+Australian BioCommons through funding from Bioplatforms Australia and the
+Australian Government's National Collaborative Research Infrastructure Strategy
+(NCRIS).
+
+We thank [Vanessa Sochat](https://orcid.org/0000-0002-4387-3819) for
+[Singularity Registry HPC (shpc)](https://github.com/singularityhub/singularity-hpc)
+and for guidance on [container-guts](https://github.com/singularityhub/guts), on
+which shelley builds.

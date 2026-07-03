@@ -1,17 +1,20 @@
-# Getting started with shelley-bio
+# Getting started with shelley
 
 This tutorial walks you through finding and installing a bioinformatics tool on a BioShell virtual machine for the first time.
 
 ## Prerequisites
 
 - You have logged into a BioShell VM on Nectar
-- `shelley-bio` is already installed (it ships with BioShell)
+- `shelley` is already installed (it ships with BioShell)
 - CVMFS is mounted at `/cvmfs/singularity.galaxyproject.org/`
+
+If `shelley` is not yet installed (for example, on a VM not yet baked with it),
+see [../how-to/install.md](../how-to/install.md).
 
 Verify your setup:
 
 ```bash
-shelley-bio --help
+shelley --help
 ```
 
 You should see the list of available commands. If not, check with your system administrator.
@@ -21,17 +24,17 @@ You should see the list of available commands. If not, check with your system ad
 Start with a tool you already know you need. Use `find` when you know its name:
 
 ```bash
-shelley-bio find fastqc
+shelley find fastqc
 ```
 
-shelley-bio returns the tool's description the top most recent container versions. You also see the next few most recent versions and whether each can be built immediately.
+shelley returns the tool's description the top most recent container versions. You also see the next few most recent versions and whether each can be built immediately.
 
 Try a few variations — `find` handles case, hyphens, and underscores:
 
 ```bash
-shelley-bio find STAR
-shelley-bio find bwa-mem2
-shelley-bio find samtools
+shelley find STAR
+shelley find bwa-mem2
+shelley find samtools
 ```
 
 ## Step 2 — Search by what you want to do
@@ -39,9 +42,9 @@ shelley-bio find samtools
 Use `search` when you know the task but not which tool to use:
 
 ```bash
-shelley-bio search "quality control"
-shelley-bio search "variant calling"
-shelley-bio search "de novo assembly"
+shelley search "quality control"
+shelley search "variant calling"
+shelley search "de novo assembly"
 ```
 
 Each result shows why it matched. Shorter technical phrases work better than full sentences.
@@ -53,7 +56,7 @@ Each result shows why it matched. Shorter technical phrases work better than ful
 Before building, check which versions are available:
 
 ```bash
-shelley-bio versions samtools
+shelley versions samtools
 ```
 
 This returns every available container sorted newest-first, with buildable status for each version. Use this when you need to pin an exact version for reproducibility.
@@ -65,13 +68,13 @@ This returns every available container sorted newest-first, with buildable statu
 Once you know the tool and version you want, build its Lmod module:
 
 ```bash
-shelley-bio build samtools
+shelley build samtools
 ```
 
 This installs the most recent available version. To install a specific version:
 
 ```bash
-shelley-bio build samtools/1.19
+shelley build samtools/1.19
 ```
 
 After a successful build, load the module normally:
