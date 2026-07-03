@@ -12,6 +12,17 @@ from ..utils.style import (
 )
 
 
+def resolve_shelley_executable() -> str | None:
+    """Locate the installed `shelley` launcher on PATH.
+
+    Used to re-invoke ourselves under sudo. We rely on PATH rather than deriving
+    a path from __file__, because the launcher and the package live in unrelated
+    directories under a `uv tool install` layout (the launcher is in
+    .../uv/tools/shelley/bin/, the package in .../site-packages/shelley/).
+    """
+    return shutil.which("shelley")
+
+
 def build_module(tool_spec: str) -> bool:
     """Build an Lmod module for a tool from CVMFS.
 
@@ -22,7 +33,7 @@ def build_module(tool_spec: str) -> bool:
 
     if needs_sudo:
         # Re-invoke with sudo, preserving the PATH so the shelley script is found.
-        shelley_path = shutil.which("shelley")
+        shelley_path = resolve_shelley_executable()
         if shelley_path is None:
             print_error("Could not locate the 'shelley' executable on PATH")
             return False
