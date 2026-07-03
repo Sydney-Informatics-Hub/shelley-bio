@@ -153,8 +153,8 @@ install:
 uvx --from git+https://github.com/Sydney-Informatics-Hub/shelley shelley find fastqc
 ```
 
-> **Experimental — read-only commands only.** This path supports `find`,
-> `versions`, and `search`. It does **not** support `build`, which needs the
+> **Experimental — read-only commands only.** This path supports `find`
+> (including `find -v`) and `search`. It does **not** support `build`, which needs the
 > system `shpc`/Singularity layout that only a full VM install provides.
 
 ## Python version

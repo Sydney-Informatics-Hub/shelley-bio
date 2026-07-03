@@ -12,7 +12,6 @@ from ..commands.build import build_module
 from ..commands.find import find_tool_sync
 from ..commands.interactive import interactive_mode
 from ..commands.search import search_tools
-from ..commands.versions import versions_sync
 from ..utils.batch import batch_build_modules, read_tools_file
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_warning, print_info, print_rule,
@@ -27,9 +26,8 @@ def _print_usage() -> None:
     print_rule("Command Usage", "secondary")
 
     usage_commands = [
-        {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley find fastqc"},
+        {"command": "find <tool_name> [-v]", "description": "Find a tool; -v lists all container versions", "example": "shelley find fastqc"},
         {"command": "search <description>", "description": "Search for tools by function", "example": "shelley search 'quality control'"},
-        {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley versions samtools"},
         {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley build samtools/1.21"},
         {"command": "interactive", "description": "Start interactive mode", "example": "shelley interactive"},
         {"command": "help", "description": "Show this help message", "example": "shelley help"},
@@ -70,11 +68,14 @@ def main() -> None:
         sys.exit(0 if build_module(arg) else 1)
 
     if command == "find":
-        if len(sys.argv) > 2:
-            find_tool_sync(sys.argv[2])
+        args = sys.argv[2:]
+        verbose = any(a in ("-v", "--verbose") for a in args)
+        positional = [a for a in args if a not in ("-v", "--verbose")]
+        if positional:
+            find_tool_sync(positional[0], verbose=verbose)
         else:
             print_warning("Missing tool name")
-            print_info("Usage: [command]shelley find <tool_name>[/command]")
+            print_info("Usage: [command]shelley find <tool_name> [-v][/command]")
             print_info("Example: [command]shelley find fastqc[/command]")
         sys.exit(0)
 
@@ -85,15 +86,6 @@ def main() -> None:
             print_warning("Missing search terms")
             print_info("Usage: [command]shelley search <description>[/command]")
             print_info("Example: [command]shelley search 'quality control'[/command]")
-        sys.exit(0)
-
-    if command == "versions":
-        if len(sys.argv) > 2:
-            versions_sync(sys.argv[2])
-        else:
-            print_warning("Missing tool name")
-            print_info("Usage: [command]shelley versions <tool_name>[/command]")
-            print_info("Example: [command]shelley versions samtools[/command]")
         sys.exit(0)
 
     if command == "interactive":

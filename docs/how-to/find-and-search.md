@@ -1,6 +1,6 @@
 # How to find and search for tools
 
-This guide covers the three read-only commands: `find`, `search`, and `versions`.
+This guide covers the two read-only commands: `find` and `search`.
 
 ## Find a tool by name — `find`
 
@@ -14,10 +14,24 @@ shelley find bwa-mem2      # hyphens and underscores handled automatically
 
 **Returns:**
 - Tool description, homepage, and EDAM operations
-- A table of recent container versions with buildable status and install state
+- A table of the most recent container versions with buildable status and install state
 - An install prompt with the `shelley build` command
 
 If no exact match is found, shelley suggests close alternatives.
+
+### List all versions — `find -v`
+
+By default `find` shows only the five most recent versions. Add `-v` (or `--verbose`)
+to see every available container for a tool, sorted newest-first and paginated:
+
+```bash
+shelley find samtools -v
+shelley find bwa --verbose
+```
+
+Use this when you need to pin an exact version for reproducibility or to test a
+specific release. Buildable status is shown for each version (✓ = in the upstream
+shpc-registry, ✗ = requires local registry fallback).
 
 > **Note:** `find` is case-insensitive. `shelley find Arriba` and `shelley find arriba` return the same result.
 
@@ -57,17 +71,3 @@ Note that hyphens are expanded during tokenisation — `"chip-seq"` matches any 
 - **Metadata is incomplete for some tools.** If `find` returns no description, check the tool's homepage directly or try `search` with related terms.
 
 For the design rationale behind these limitations, see [docs/explanation/search-design.md](../explanation/search-design.md).
-
-## List all versions — `versions`
-
-Use `versions` to see every available container for a tool, sorted newest-first.
-
-```bash
-shelley versions samtools
-shelley versions bwa
-shelley versions gatk
-```
-
-**Returns:** Every available version with buildable status (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback); an install prompt.
-
-Use this when you need to pin an exact version for reproducibility or to test a specific release.

@@ -33,8 +33,8 @@ shelley find fastqc
 # Search by function (in development)
 shelley search "quality control"
 
-# List available versions
-shelley versions samtools
+# List all available versions
+shelley find samtools -v
 
 # Build an Lmod module
 shelley build samtools
@@ -52,7 +52,7 @@ shelley interactive
 |---|---|---|
 | Tutorial | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) | First-time walkthrough |
 | How-to | [docs/how-to/install.md](docs/how-to/install.md) | Install/update on a VM or BioShell image |
-| How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search, versions |
+| How-to | [docs/how-to/find-and-search.md](docs/how-to/find-and-search.md) | find, search |
 | How-to | [docs/how-to/build-modules.md](docs/how-to/build-modules.md) | build and batch operations |
 | How-to | [docs/how-to/maintain-corpus.md](docs/how-to/maintain-corpus.md) | Update data artifacts |
 | How-to | [docs/how-to/developer-setup.md](docs/how-to/developer-setup.md) | Dev environment and tests |

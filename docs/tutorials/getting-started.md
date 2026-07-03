@@ -53,15 +53,14 @@ Each result shows why it matched. Shorter technical phrases work better than ful
 
 ## Step 3 — Check available versions
 
-Before building, check which versions are available:
+`shelley find` shows only the five most recent versions by default. To see every
+available container, add the `-v` (verbose) flag:
 
 ```bash
-shelley versions samtools
+shelley find samtools -v
 ```
 
-This returns every available container sorted newest-first, with buildable status for each version. Use this when you need to pin an exact version for reproducibility.
-
-> **Note:** Versions is under active development. 
+This returns every available container sorted newest-first, paginated, with buildable status for each version. Use this when you need to pin an exact version for reproducibility.
 
 ## Step 4 — Build a module
 
@@ -86,6 +85,6 @@ samtools --version
 
 ## Next steps
 
-- [docs/how-to/find-and-search.md](../how-to/find-and-search.md) — tips and all options for `find`, `search`, and `versions`
+- [docs/how-to/find-and-search.md](../how-to/find-and-search.md) — tips and all options for `find` and `search`
 - [docs/how-to/build-modules.md](../how-to/build-modules.md) — building multiple modules at once
 - [docs/reference/cli.md](../reference/cli.md) — complete command reference
