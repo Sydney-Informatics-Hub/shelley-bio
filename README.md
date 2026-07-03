@@ -82,3 +82,24 @@ shelley/
 - Access to CVMFS repositories (typically `/cvmfs/singularity.galaxyproject.org/`)
 - Lmod (for module management)
 - Singularity/Apptainer (for container execution)
+
+## License
+
+Copyright (C) 2026 Frederick Jaya, Mitchell O'Brien, Georgie Samaha.
+
+shelley is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for the full text.
+
+## Acknowledgements
+
+This project was completed as part of the BioCLI project, supported by the
+Australian BioCommons through funding from Bioplatforms Australia and the
+Australian Government's National Collaborative Research Infrastructure Strategy
+(NCRIS).
+
+We thank [Vanessa Sochat](https://orcid.org/0000-0002-4387-3819) for
+[Singularity Registry HPC (shpc)](https://github.com/singularityhub/singularity-hpc)
+and for guidance on [container-guts](https://github.com/singularityhub/guts), on
+which shelley builds.

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: shelley
+abstract: "A bioinformatics tool finder and module builder for CVMFS-hosted containers on BioShell."
+type: software
+authors:
+  - given-names: Frederick
+    family-names: Jaya
+    orcid: "https://orcid.org/0000-0002-4019-7026"
+  - given-names: Mitchell
+    family-names: O'Brien
+    orcid: "https://orcid.org/0000-0003-0662-9101"
+  - given-names: Georgie
+    family-names: Samaha
+    orcid: "https://orcid.org/0000-0003-0419-1476"
+version: 0.1.0
+license: GPL-3.0-or-later
+repository-code: "https://github.com/Sydney-Informatics-Hub/shelley"
+url: "https://github.com/Sydney-Informatics-Hub/shelley"

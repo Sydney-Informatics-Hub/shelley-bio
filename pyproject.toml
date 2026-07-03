@@ -4,19 +4,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "shelley"
-version = "0.1.0"
-description = "A powerful bioinformatics tool finder and module builder for CVMFS"
+dynamic = ["version"]
+description = "A bioinformatics tool finder and module builder for CVMFS-hosted containers on BioShell"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [
-    {name = "BioCommons"},
+    {name = "Frederick Jaya"},
+    {name = "Mitchell O'Brien"},
+    {name = "Georgie Samaha"},
 ]
+keywords = ["bioinformatics", "cvmfs", "singularity", "lmod", "containers", "bioshell"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -45,11 +48,16 @@ shelley-build-rsec = "shelley.scripts.build_rsec_meta:main"
 
 [project.urls]
 Homepage = "https://github.com/Sydney-Informatics-Hub/shelley"
+Documentation = "https://github.com/Sydney-Informatics-Hub/shelley/tree/main/docs"
 "Bug Reports" = "https://github.com/Sydney-Informatics-Hub/shelley/issues"
 Source = "https://github.com/Sydney-Informatics-Hub/shelley"
+Changelog = "https://github.com/Sydney-Informatics-Hub/shelley/blob/main/CHANGELOG.md"
 
 [tool.uv.sources]
 container-guts = { git = "https://github.com/Sydney-Informatics-Hub/guts.git", branch = "singularity" }
+
+[tool.hatch.version]
+path = "shelley/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["shelley"]
