@@ -59,3 +59,49 @@ uv run pytest -v --tb=short               # verbose with short tracebacks
 uv run pytest tests/test_cvmfs_builder.py # single file
 uv run pytest -m "not network"            # exclude network tests when offline
 ```
+
+## Preparing a release
+
+### Branch model
+
+- **`main`** is the **default branch** and holds **released** code. It is updated
+  from `dev` at release time and each release is tagged `vX.Y.Z`. The install
+  guide points end users at `@main` (latest release) or a specific tag
+  (reproducible).
+- **`dev`** carries **active development** — feature work merges here first, then
+  into `main` at release time. Installing from `@dev` gets the latest, possibly
+  unstable code.
+
+### Version is single-sourced
+
+The version lives in **one** place — `__version__` in
+[`shelley/__init__.py`](../../shelley/__init__.py). `pyproject.toml` reads it
+dynamically (`[tool.hatch.version]`), and `shelley --version` reports it. Never
+edit a version string anywhere else.
+
+### Release checklist
+
+On `dev`:
+
+1. Bump the version (follow [SemVer](https://semver.org/)): `__version__` in
+   `shelley/__init__.py` (the source `pyproject.toml` reads), plus the `version`
+   and `date-released` fields in `CITATION.cff`.
+2. Update `CHANGELOG.md`: rename the `Unreleased` section to the new version with
+   today's date, and add the release link at the bottom.
+3. Confirm the build and version resolve:
+   ```bash
+   uv build                     # builds shelley-<version>.{whl,tar.gz}
+   uv run shelley --version     # should print the new version
+   uv run pytest -m "not cvmfs" # tests green
+   ```
+4. Commit and open a PR into `main`; merge once CI passes.
+
+On `main`, after merge:
+
+5. Tag and push:
+   ```bash
+   git checkout main && git pull
+   git tag -a v0.1.0 -m "shelley 0.1.0"
+   git push origin v0.1.0
+   ```
+6. Create the GitHub release from the tag, pasting the CHANGELOG entry as notes.
