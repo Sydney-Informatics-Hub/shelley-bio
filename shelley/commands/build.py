@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -21,13 +22,14 @@ def build_module(tool_spec: str) -> bool:
 
     if needs_sudo:
         # Re-invoke with sudo, preserving the PATH so the shelley script is found.
-        # TODO: replace with shutil.which('shelley') for robustness.
-        script_dir = Path(__file__).parent.parent.parent
-        shelley_path = script_dir / "bin" / "shelley"
+        shelley_path = shutil.which("shelley")
+        if shelley_path is None:
+            print_error("Could not locate the 'shelley' executable on PATH")
+            return False
 
         cmd = [
             "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
-            str(shelley_path), "build", tool_spec,
+            shelley_path, "build", tool_spec,
         ]
 
         try:
