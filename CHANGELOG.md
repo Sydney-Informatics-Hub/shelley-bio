@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `shelley find <tool> -vv` — lists every individual container build (one row per
+  `--hash`) with buildable/installed status and the full CVMFS container path.
+
 ### Changed
 
 - Merged the `versions` command into `find`. Run `shelley find <tool> -v`

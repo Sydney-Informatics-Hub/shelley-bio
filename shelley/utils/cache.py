@@ -58,3 +58,21 @@ def compute_version_entries(tool_id: str, pairs: list[tuple[str, str]]) -> list[
             seen.add(short)
             result.append({"version": short, "buildable": short in buildable_shorts})
     return result
+
+
+def compute_build_entries(tool_id: str, pairs: list[tuple[str, str]]) -> list[dict]:
+    """Annotate every (tag, path) build with buildable status, without deduplicating.
+
+    Unlike ``compute_version_entries``, this keeps every individual container build
+    (a single short version may have several ``--hash`` builds) and carries the full
+    CVMFS container path — used by the ``-vv`` view.
+    """
+    try:
+        registry_tags = get_registry_tags(tool_id)
+        buildable_shorts = {tag.split("--")[0] for tag in registry_tags}
+    except Exception:
+        buildable_shorts = set()
+    return [
+        {"tag": tag, "path": path, "buildable": tag.split("--")[0] in buildable_shorts}
+        for tag, path in pairs
+    ]

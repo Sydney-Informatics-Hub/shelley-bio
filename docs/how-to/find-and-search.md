@@ -33,6 +33,16 @@ Use this when you need to pin an exact version for reproducibility or to test a
 specific release. Buildable status is shown for each version (✓ = in the upstream
 shpc-registry, ✗ = requires local registry fallback).
 
+Add a second `v` (`-vv`) to expand each version into its individual builds and show
+the full CVMFS container path for each:
+
+```bash
+shelley find samtools -vv
+```
+
+This lists one row per build (a version may have several `--hash` builds) with its
+buildable and installed status and the full `/cvmfs/...` image path.
+
 > **Note:** `find` is case-insensitive. `shelley find Arriba` and `shelley find arriba` return the same result.
 
 ## Search by function — `search`

@@ -9,17 +9,23 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..search.rsec import RsecSource
-from ..utils.cache import compute_version_entries, load_versions_from_cache
+from ..utils.cache import (
+    compute_build_entries,
+    compute_version_entries,
+    load_versions_from_cache,
+)
 from ..utils.globals import LMOD_MODULES_PATH
 from ..utils.render import paginate, print_find_hint, render_tool_table
 from ..utils.style import ShelleyStyle, console
 
 
-def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
+def find_tool_sync(tool_name: str, verbosity: int = 0) -> None:
     """Find a tool by name using RSEC + CVMFS cache (no MCP server needed).
 
-    When ``verbose`` is True, the full version list is shown paginated instead
-    of the truncated top-5 preview.
+    ``verbosity`` controls the version listing:
+      0 — truncated top-5 preview (default)
+      1 (``-v``) — full paginated version list
+      2 (``-vv``) — full paginated list of every build, with CVMFS container paths
     """
     clean_name = re.sub(r"[:/].*$", "", tool_name).strip()
     query_lower = clean_name.lower()
@@ -61,6 +67,7 @@ def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
             "available": True,
             "all_versions": unique_versions,
             "total_versions": len(unique_versions),
+            "builds": compute_build_entries(tool_id, pairs) if verbosity >= 2 else None,
             "install_command": f"shelley build {tool_id}",
         }
 
@@ -82,10 +89,10 @@ def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
         "suggestions": suggestions,
         "tool": tool_payload,
         "containers": containers_payload,
-    }, verbose=verbose)
+    }, verbosity=verbosity)
 
 
-def _render_find_tool(payload: dict, verbose: bool = False) -> None:
+def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
     """Render a find_tool result payload."""
     query = payload.get("query", "unknown")
 
@@ -139,6 +146,12 @@ def _render_find_tool(payload: dict, verbose: bool = False) -> None:
         all_versions = containers["all_versions"]
         total = containers["total_versions"]
 
+        def _installed(version: str) -> bool:
+            return any((lmod_path / tool_id).glob(f"{version}*.lua"))
+
+        def _glyph(flag: bool) -> str:
+            return "[success]✓[/success]" if flag else "[muted]✗[/muted]"
+
         def build_versions_table(entries: list[dict], title: str) -> Table:
             table = Table(
                 title=title,
@@ -151,15 +164,45 @@ def _render_find_tool(payload: dict, verbose: bool = False) -> None:
             table.add_column("Buildable", no_wrap=True)
             table.add_column("Status", no_wrap=True)
             for entry in entries:
-                version = entry["version"]
-                buildable = entry["buildable"]
-                installed = any((lmod_path / tool_id).glob(f"{version}*.lua"))
-                buildable_str = "[success]✓[/success]" if buildable else "[muted]✗[/muted]"
+                installed = _installed(entry["version"])
                 status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
-                table.add_row(version, buildable_str, status)
+                table.add_row(entry["version"], _glyph(entry["buildable"]), status)
             return table
 
-        if verbose:
+        def build_paths_table(entries: list[dict], title: str) -> Table:
+            table = Table(
+                title=title,
+                box=ROUNDED,
+                border_style="primary",
+                header_style="table.header",
+                show_lines=False,
+            )
+            table.add_column("Version", style="version", no_wrap=True)
+            table.add_column("Buildable", no_wrap=True)
+            table.add_column("Installed", no_wrap=True)
+            table.add_column("Container Path", style="accent", overflow="fold")
+            for entry in entries:
+                short = entry["tag"].split("--")[0]
+                table.add_row(
+                    entry["tag"],
+                    _glyph(entry["buildable"]),
+                    _glyph(_installed(short)),
+                    entry["path"],
+                )
+            return table
+
+        if verbosity >= 2:
+            builds = containers["builds"]
+
+            def render_page(page_items, page, total_pages, total_count):
+                page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
+                console.print(build_paths_table(
+                    page_items,
+                    f"[header]Available Builds ({total_count} total){page_info}[/header]",
+                ))
+
+            paginate(builds, render_page)
+        elif verbosity == 1:
             def render_page(page_items, page, total_pages, total_count):
                 page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
                 console.print(build_versions_table(

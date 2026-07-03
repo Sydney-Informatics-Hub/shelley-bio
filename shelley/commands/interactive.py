@@ -3,13 +3,14 @@
 from .build import build_module
 from .find import find_tool_sync
 from .search import search_tools
+from ..utils.args import parse_verbosity
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_rule,
     print_warning, print_info, print_success,
 )
 
 _COMMANDS = [
-    {"command": "find <tool> [-v]",     "description": "Find a tool; -v lists all versions", "example": "find fastqc"},
+    {"command": "find <tool> [-v|-vv]", "description": "Find a tool; -v all versions, -vv adds paths", "example": "find fastqc"},
     {"command": "search <terms>",       "description": "Search for tools by description",   "example": "search quality control"},
     {"command": r"build <tool\[/ver]>", "description": "Build an Lmod module for a tool",   "example": "build samtools/1.21"},
     {"command": "help",                 "description": "Show this help table",              "example": "help"},
@@ -44,13 +45,11 @@ def interactive_mode() -> None:
         elif cmd == "help":
             console.print(help_table)
         elif cmd == "find":
-            flags = parts[1:]
-            verbose = any(p in ("-v", "--verbose") for p in flags)
-            positional = [p for p in flags if p not in ("-v", "--verbose")]
+            verbosity, positional = parse_verbosity(parts[1:])
             if positional:
-                find_tool_sync(positional[0], verbose=verbose)
+                find_tool_sync(positional[0], verbosity=verbosity)
             else:
-                print_warning("Usage: find <tool_name> [-v]")
+                print_warning("Usage: find <tool_name> [-v|-vv]")
         elif cmd == "search":
             if len(parts) > 1:
                 search_tools(" ".join(parts[1:]))
