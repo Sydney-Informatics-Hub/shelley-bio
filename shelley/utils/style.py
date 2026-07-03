@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Shelley Bio Styling Module
+Shelley Styling Module
 
-Rich-based styling for Shelley Bio following Australian BioCommons design guidelines.
+Rich-based styling for Shelley following Australian BioCommons design guidelines.
 Provides consistent colors, themes, and output formatting across the application.
 """
 
@@ -100,7 +100,7 @@ console = Console(theme=SHELLEY_THEME, width=120)
 
 
 class ShelleyStyle:
-    """Styling utilities for Shelley Bio."""
+    """Styling utilities for Shelley."""
     
     @staticmethod
     def create_header(title: str, subtitle: str = "") -> Panel:
@@ -119,7 +119,7 @@ class ShelleyStyle:
     
     @staticmethod
     def create_banner() -> Panel:
-        """Create the main Shelley Bio banner with authentic BioCommons logo."""
+        """Create the main Shelley banner with authentic BioCommons logo."""
         # BioCommons logo using overlapping hexagon pattern with official colors
         logo = f"""
                     [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░                                   
@@ -370,7 +370,7 @@ class ShelleyStyle:
     @staticmethod
     def create_about_panel() -> Panel:
         """Create an about panel with version and credits."""
-        content = f"""[header]Shelley Bio[/header] - [accent]BioCommons Edition[/accent]
+        content = f"""[header]Shelley[/header] - [accent]BioCommons Edition[/accent]
 
 [muted]A comprehensive bioinformatics tool finder and module builder[/muted]
 
@@ -404,7 +404,7 @@ class ShelleyStyle:
         except Exception:
             version = "0.1.0-dev"
         
-        return f"[header]Shelley Bio[/header] [version]{version}[/version]"
+        return f"[header]Shelley[/header] [version]{version}[/version]"
     
     @staticmethod
     def create_progress_bar(description: str) -> Progress:
@@ -457,7 +457,7 @@ class ShelleyStyle:
 
 # Convenience functions for common operations
 def print_banner():
-    """Print the main Shelley Bio banner."""
+    """Print the main Shelley banner."""
     console.print(ShelleyStyle.create_banner())
 
 def print_header(title: str, subtitle: str = ""):

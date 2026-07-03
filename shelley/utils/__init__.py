@@ -1,7 +1,7 @@
 """
-Shelley Bio Utilities Package
+Shelley Utilities Package
 
-Utility modules for Shelley Bio including styling and common functions.
+Utility modules for Shelley including styling and common functions.
 """
 
 from .style import (

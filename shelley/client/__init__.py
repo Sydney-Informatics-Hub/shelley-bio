@@ -1,5 +1,5 @@
 """
-Client module for Shelley Bio CLI interface.
+Client module for Shelley CLI interface.
 """
 
 from .cli import main

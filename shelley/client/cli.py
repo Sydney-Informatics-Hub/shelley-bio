@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shelley Bio CLI entry point."""
+"""Shelley CLI entry point."""
 #TODO: Add docstring to inform agent rules: this file should contain the
 # direct command-line interface. Helper functions, and style/rendering 
 # functions always end up here. They should not. These should be imported from

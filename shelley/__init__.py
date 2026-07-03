@@ -1,5 +1,5 @@
 """
-Shelley Bio - A powerful bioinformatics tool finder and module builder
+Shelley - A bioinformatics tool finder and module builder
 
 This package provides tools for finding, querying, and building modules for
 bioinformatics software from CVMFS repositories.
