@@ -160,13 +160,15 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 header_style="table.header",
                 show_lines=False,
             )
-            table.add_column("Version", style="version", no_wrap=True)
+            table.add_column("Versions", style="version", no_wrap=True)
             table.add_column("Buildable", no_wrap=True)
-            table.add_column("Status", no_wrap=True)
+            table.add_column("Installed", no_wrap=True)
             for entry in entries:
-                installed = _installed(entry["version"])
-                status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
-                table.add_row(entry["version"], _glyph(entry["buildable"]), status)
+                table.add_row(
+                    entry["version"],
+                    _glyph(entry["buildable"]),
+                    _glyph(_installed(entry["version"])),
+                )
             return table
 
         def build_paths_table(entries: list[dict], title: str) -> Table:
@@ -177,7 +179,7 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 header_style="table.header",
                 show_lines=False,
             )
-            table.add_column("Version", style="version", no_wrap=True)
+            table.add_column("Versions", style="version", no_wrap=True)
             table.add_column("Buildable", no_wrap=True)
             table.add_column("Installed", no_wrap=True)
             table.add_column("Container Path", style="accent", overflow="fold")
@@ -228,6 +230,10 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 "but can take a few minutes longer. This is suited for users who need "
                 "a specific older version for reproducibility.[/muted]"
             )
+
+        console.print(
+            "[muted]Installed ✓: This version is already available to module load on this system.[/muted]"
+        )
 
         console.print(Panel(
             f"To install the latest version of {title_name}, run:\n\n"
