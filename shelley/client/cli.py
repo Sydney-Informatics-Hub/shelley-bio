@@ -16,6 +16,7 @@ from ..commands.versions import versions_sync
 from ..utils.batch import batch_build_modules, read_tools_file
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_warning, print_info, print_rule,
+    print_version,
 )
 
 
@@ -51,6 +52,10 @@ def main() -> None:
 
     if command in ("help", "--help", "-h"):
         _print_usage()
+        sys.exit(0)
+
+    if command in ("--version", "-V"):
+        print_version()
         sys.exit(0)
 
     if command == "build" and len(sys.argv) > 2:

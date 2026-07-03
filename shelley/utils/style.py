@@ -402,7 +402,7 @@ class ShelleyStyle:
             import importlib.metadata
             version = importlib.metadata.version('shelley')
         except Exception:
-            version = "1.0.0-dev"
+            version = "0.1.0-dev"
         
         return f"[header]Shelley Bio[/header] [version]{version}[/version]"
     
