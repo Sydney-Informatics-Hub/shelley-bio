@@ -101,7 +101,7 @@ On `main`, after merge:
 5. Tag and push:
    ```bash
    git checkout main && git pull
-   git tag -a v0.1.0 -m "shelley 0.1.0"
+   git tag v0.1.0
    git push origin v0.1.0
    ```
 6. Create the GitHub release from the tag, pasting the CHANGELOG entry as notes.
