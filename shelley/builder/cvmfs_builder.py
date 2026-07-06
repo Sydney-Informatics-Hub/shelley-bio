@@ -17,7 +17,7 @@ import questionary
 from datetime import datetime
 from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
 from shelley.utils import console, ShelleyStyle
-from shelley.builder.guts_integration import extract_aliases
+from shelley.builder.guts_integration import extract_aliases, select_aliases
 
 log = logging.getLogger(__name__)
 
@@ -227,7 +227,8 @@ class CVMFSModuleBuilder:
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
-        local_registry: str = LOCAL_REGISTRY,
+        local_registry: str = LOCAL_REGISTRY, detect_bins: bool = False,
+        status=None,
     ) -> None:
         """
         Create or update a local shpc registry entry for a CVMFS tag absent from
@@ -246,6 +247,16 @@ class CVMFSModuleBuilder:
         aliases = extract_aliases(container_path)
         if not aliases:
             log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+        elif detect_bins:
+            # Let the user pick which detected binaries to expose. Suspend the
+            # status spinner so the interactive prompt owns the terminal.
+            if status is not None:
+                status.stop()
+            try:
+                aliases = select_aliases(aliases)
+            finally:
+                if status is not None:
+                    status.start()
 
         # Download upstream entry as a base (best-effort; tool may not be in upstream at all)
         remote_url = (
@@ -273,7 +284,8 @@ class CVMFSModuleBuilder:
         """Uninstall an existing shpc entry (best-effort; ignores errors)."""
         subprocess.run([_SHPC, "uninstall", "--force", uri_tag], capture_output=True, text=True)
 
-    def shpc_install(self, tool_name: str, version: str) -> Path:
+    def shpc_install(self, tool_name: str, version: str,
+                     detect_bins: bool = False, status=None) -> Path:
         """
         Install a CVMFS container as a functional Lmod module using shpc.
 
@@ -283,6 +295,10 @@ class CVMFSModuleBuilder:
           conflict.
         - Version absent from upstream: uninstall any stale install, create a local
           registry entry with guts-extracted aliases, then call shpc install once.
+
+        When ``detect_bins`` is set, the guts-extracted aliases are presented in an
+        interactive checkbox before writing the local entry (non-upstream path only);
+        ``status`` is the active rich spinner, suspended while the prompt is shown.
 
         Returns:
             Path to the symlinked .lua file (the user-facing module path).
@@ -296,7 +312,10 @@ class CVMFSModuleBuilder:
         if not in_upstream:
             # Version absent from upstream — uninstall stale build, create local entry.
             self._shpc_uninstall(uri_tag)
-            self._ensure_local_registry_entry(tool_name, version, container_path, uri)
+            self._ensure_local_registry_entry(
+                tool_name, version, container_path, uri,
+                detect_bins=detect_bins, status=status,
+            )
             self._register_local_registry(LOCAL_REGISTRY)
             console.print(ShelleyStyle.create_warning_panel(
                 "Tag not in registry",

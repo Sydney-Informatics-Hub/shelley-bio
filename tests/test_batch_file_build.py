@@ -65,7 +65,7 @@ def test_main_file_arg_calls_batch(tmp_path, monkeypatch):
         with pytest.raises(SystemExit) as exc:
             main()
         assert exc.value.code == 0
-        mock_batch.assert_called_once_with(["samtools", "fastqc"])
+        mock_batch.assert_called_once_with(["samtools", "fastqc"], detect_bins=False)
         mock_single.assert_not_called()
 
 
@@ -78,7 +78,7 @@ def test_main_non_file_arg_calls_single(monkeypatch):
         with pytest.raises(SystemExit) as exc:
             main()
         assert exc.value.code == 0
-        mock_single.assert_called_once_with("samtools")
+        mock_single.assert_called_once_with("samtools", detect_bins=False)
         mock_batch.assert_not_called()
 
 

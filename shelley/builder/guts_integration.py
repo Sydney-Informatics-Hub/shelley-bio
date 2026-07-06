@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+import questionary
 from container_guts.main import ManifestGenerator
 
 _SUPPLEMENTARY_DB = Path(__file__).parent.parent / "data" / "guts_db"
@@ -76,3 +78,31 @@ def extract_aliases(cvmfs_path: str) -> list[dict]:
     finally:
         if tmpdir:
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def select_aliases(aliases: list[dict]) -> list[dict]:
+    """Prompt the user to choose which detected binaries become aliases.
+
+    Presents an interactive checkbox of the ``extract_aliases`` candidates, all
+    pre-checked so accepting the default reproduces the non-interactive result.
+    Returns the chosen subset (order preserved).
+
+    Raises:
+        ValueError: If the user cancels the selection.
+    """
+    if not aliases:
+        return aliases
+
+    choices = [
+        questionary.Choice(title=a["name"], value=a, checked=True)
+        for a in aliases
+    ]
+    selected = questionary.checkbox(
+        "Select which binaries to expose as aliases:",
+        choices=choices,
+    ).ask()
+
+    if selected is None:
+        raise ValueError("Alias selection cancelled.")
+
+    return selected

@@ -252,7 +252,8 @@ def test_build_no_version(mock_builder_cls):
     result = build_module("samtools")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.23.1--ha83d96e_0")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.23.1--ha83d96e_0", detect_bins=False, status=None)
 
 
 def test_build_short_version(mock_builder_cls):
@@ -260,7 +261,8 @@ def test_build_short_version(mock_builder_cls):
     result = build_module("samtools/1.21")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.21--h96c455f_1")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.21--h96c455f_1", detect_bins=False, status=None)
 
 
 def test_build_full_tag(mock_builder_cls):
@@ -268,7 +270,8 @@ def test_build_full_tag(mock_builder_cls):
     result = build_module("samtools/1.21--h96c455f_1")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.21--h96c455f_1")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.21--h96c455f_1", detect_bins=False, status=None)
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +451,65 @@ def test_shpc_install_creates_local_entry_when_not_in_upstream(builder, tmp_path
 
     assert call_order == ["uninstall", "ensure", "install"]
     assert dest.is_symlink()
+
+
+def _read_aliases(local_registry, tool):
+    import yaml
+    return yaml.safe_load(
+        (local_registry / "quay.io" / "biocontainers" / tool / "container.yaml").read_text()
+    )["aliases"]
+
+
+def test_ensure_local_registry_entry_detect_bins_narrows_aliases(builder, tmp_path):
+    """detect_bins=True → select_aliases narrows the written aliases to the chosen subset."""
+    tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
+    local_registry = tmp_path / "registry"
+    container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    detected = [
+        {"name": "vcftools", "command": "vcftools"},
+        {"name": "telnet", "command": "telnet"},
+        {"name": "bootchartd", "command": "bootchartd"},
+    ]
+    chosen = [detected[0]]
+
+    with patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=detected), \
+         patch("shelley.builder.cvmfs_builder.select_aliases", return_value=chosen) as mock_sel, \
+         patch("shelley.builder.cvmfs_builder.subprocess.run",
+               return_value=MagicMock(returncode=1, stdout="", stderr="")), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        builder._ensure_local_registry_entry(
+            tool, version, container_path, f"quay.io/biocontainers/{tool}",
+            local_registry=str(local_registry), detect_bins=True,
+        )
+
+    mock_sel.assert_called_once_with(detected)
+    assert _read_aliases(local_registry, tool) == chosen
+
+
+def test_ensure_local_registry_entry_no_detect_bins_keeps_all(builder, tmp_path):
+    """detect_bins=False (default) → no prompt; all detected aliases are written."""
+    tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
+    local_registry = tmp_path / "registry"
+    container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    detected = [
+        {"name": "vcftools", "command": "vcftools"},
+        {"name": "telnet", "command": "telnet"},
+    ]
+
+    with patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=detected), \
+         patch("shelley.builder.cvmfs_builder.select_aliases") as mock_sel, \
+         patch("shelley.builder.cvmfs_builder.subprocess.run",
+               return_value=MagicMock(returncode=1, stdout="", stderr="")), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        builder._ensure_local_registry_entry(
+            tool, version, container_path, f"quay.io/biocontainers/{tool}",
+            local_registry=str(local_registry),
+        )
+
+    mock_sel.assert_not_called()
+    assert _read_aliases(local_registry, tool) == detected
 
 
 # ---------------------------------------------------------------------------
