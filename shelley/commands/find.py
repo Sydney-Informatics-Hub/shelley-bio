@@ -95,6 +95,7 @@ def find_tool_sync(tool_name: str, verbosity: int = 0) -> None:
 def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
     """Render a find_tool result payload."""
     query = payload.get("query", "unknown")
+    query_lower = query.lower()
 
     if not payload.get("found"):
         suggestions = payload.get("suggestions", [])
@@ -220,7 +221,7 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 table.add_row(
                     f"[muted]+ {total - len(shown_versions)} more[/muted]",
                     "",
-                    f"[muted]shelley find {query} -v[/muted]",
+                    f"[muted]shelley find {query_lower} -v[/muted]",
                 )
             console.print(table)
 
@@ -235,9 +236,18 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
             "[muted]Installed ✓: This version is already available to module load on this system.[/muted]"
         )
 
-        console.print(Panel(
+        latest_version = all_versions[0]["version"] if all_versions else ""
+        install_text = (
             f"To install the latest version of {title_name}, run:\n\n"
-            f"[command]shelley build {query}[/command]",
+            f"[command]shelley build {query_lower}[/command]"
+        )
+        if latest_version:
+            install_text += (
+                f"\n\nTo install a specific version of {title_name}, run:\n\n"
+                f"[command]shelley build {query_lower}/{latest_version}[/command]"
+            )
+        console.print(Panel(
+            install_text,
             title="[header]Install[/header]",
             box=ROUNDED,
             border_style="info",
