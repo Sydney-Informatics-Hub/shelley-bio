@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
+from ..utils.modules import load_build_modules
 from ..utils.style import (
     console, ShelleyStyle, print_info, print_warning, print_error, print_rule,
 )
@@ -61,6 +62,12 @@ def build_module(tool_spec: str, edit_aliases: bool = False) -> bool:
         except KeyboardInterrupt:
             print_warning("Build cancelled by user")
             return False
+
+    # Load shpc + singularity here (not in CVMFSModuleBuilder.__init__) so it only
+    # happens on the build path. This runs in whichever process actually performs the
+    # install — including the elevated child after the sudo re-exec above — rather than
+    # relying on `sudo -E` preserving the Lmod environment.
+    load_build_modules()
 
     builder = CVMFSModuleBuilder()
 

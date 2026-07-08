@@ -23,7 +23,14 @@ from shelley.builder.guts_integration import (
 
 log = logging.getLogger(__name__)
 
-_SHPC = shutil.which("shpc") or "/opt/shpc/bin/shpc"
+def _shpc_bin() -> str:
+    """Resolve the shpc executable at call time.
+
+    Resolved lazily rather than at import so it picks up an shpc that only appears on
+    PATH after the build path loads the shpc module (see load_build_modules). Falls
+    back to the known install location when shpc is not on PATH.
+    """
+    return shutil.which("shpc") or "/opt/shpc/bin/shpc"
 
 def _load_registry_config(uri: str, local_yaml: Path, force_upstream: bool = False) -> dict:
     """Return the shpc registry config dict for uri.
@@ -86,9 +93,14 @@ class CVMFSModuleBuilder:
     
     def __init__(
         self,
-        cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH, 
+        cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH,
         lmod_modules: str = LMOD_MODULES_PATH
     ):
+        # Kept side-effect-free on purpose: read-only callers (e.g.
+        # list_cvmfs_versions, find) construct this builder without needing shpc or
+        # singularity. Loading the shpc/singularity Lmod modules is done separately on
+        # the build path (shelley.utils.modules.load_build_modules) so shelley stays
+        # uvx-able for read-only commands on non-BioShell systems.
         self.cvmfs_singularity = cvmfs_singularity
         self.lmod_modules = lmod_modules
         self.cvmfs_singularity_path = Path(self.cvmfs_singularity)
@@ -206,7 +218,7 @@ class CVMFSModuleBuilder:
         log.info(msg)
         
         result = subprocess.run(
-            [_SHPC, "install", uri_tag, container_path, "--keep-path"],
+            [_shpc_bin(), "install", uri_tag, container_path, "--keep-path"],
             capture_output=True, text=True,
         )
         return result.returncode, result.stdout + result.stderr
@@ -215,12 +227,12 @@ class CVMFSModuleBuilder:
         """Ensure local_registry is in shpc's registry search path (best-effort)."""
         try:
             result = subprocess.run(
-                [_SHPC, "config", "get", "registry"],
+                [_shpc_bin(), "config", "get", "registry"],
                 capture_output=True, text=True,
             )
             if local_registry not in result.stdout:
                 subprocess.run(
-                    [_SHPC, "config", "add", "registry", local_registry],
+                    [_shpc_bin(), "config", "add", "registry", local_registry],
                     capture_output=True, text=True, check=True,
                 )
                 log.info("Registered local registry with shpc: %s", local_registry)
@@ -288,7 +300,7 @@ class CVMFSModuleBuilder:
 
     def _shpc_uninstall(self, uri_tag: str) -> None:
         """Uninstall an existing shpc entry (best-effort; ignores errors)."""
-        subprocess.run([_SHPC, "uninstall", "--force", uri_tag], capture_output=True, text=True)
+        subprocess.run([_shpc_bin(), "uninstall", "--force", uri_tag], capture_output=True, text=True)
 
     def shpc_install(self, tool_name: str, version: str,
                      edit_aliases: bool = False, status=None) -> Path:
@@ -365,7 +377,7 @@ class CVMFSModuleBuilder:
             )
 
         shpc_module_base = Path(subprocess.run(
-            [_SHPC, "config", "get", "module_base"],
+            [_shpc_bin(), "config", "get", "module_base"],
             capture_output=True, text=True, check=True,
         ).stdout.strip())
         src = shpc_module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
