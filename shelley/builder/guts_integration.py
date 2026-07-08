@@ -118,7 +118,7 @@ def select_aliases(aliases: list[dict]) -> list[dict]:
         for a in aliases
     ]
     selected = questionary.checkbox(
-        "Select which binaries to expose as aliases (selected binaries can be edited in the next step):",
+        "Select which binaries to expose as aliases (these can be renamed in the next step):",
         choices=choices,
         instruction="(↑↓ move · space toggle · ctrl-a select all · type to filter · enter confirm)",
         use_search_filter=True,
@@ -139,7 +139,7 @@ def _rename_aliases(aliases: list[dict]) -> list[dict]:
     if not questionary.confirm(
         "Rename any aliases?",
         default=False,
-        instruction="()",
+        instruction="(y/n)",
     ).ask():
         return aliases
 
@@ -155,7 +155,6 @@ def _rename_aliases(aliases: list[dict]) -> list[dict]:
         new_name = questionary.text(
             f"New name for '{alias['name']}':",
             default=alias["name"],
-            instruction="(invocation name only; the binary it runs is unchanged)",
         ).ask()
         if _cancelled(new_name):
             raise ValueError("Alias rename cancelled.")
@@ -176,14 +175,14 @@ def _add_aliases(aliases: list[dict], require_confirm: bool = True) -> list[dict
     if require_confirm and not questionary.confirm(
         "Add new aliases?",
         default=False,
-        instruction="",
+        instruction="(y/n)",
     ).ask():
         return aliases
 
     while True:
         name = questionary.text(
             "Alias name:",
-            instruction="(what you type to run the tool; blank to stop)",
+            instruction="(what you would type to run the tool e.g. fastqc)",
         ).ask()
         if _cancelled(name):
             raise ValueError("Alias add cancelled.")
@@ -192,9 +191,9 @@ def _add_aliases(aliases: list[dict], require_confirm: bool = True) -> list[dict
             break
 
         command = questionary.text(
-            "Command/binary:",
+            "Binary path:",
             default=name,
-            instruction="(the executable inside the container e.g. /usr/local/bin/<tool_name>)",
+            instruction="(full path to the executable inside the container e.g. /usr/local/bin/<tool_name>)",
         ).ask()
         if _cancelled(command):
             raise ValueError("Alias add cancelled.")
