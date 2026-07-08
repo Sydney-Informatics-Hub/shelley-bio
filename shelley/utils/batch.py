@@ -25,16 +25,17 @@ def read_tools_file(path: Path) -> list[str]:
     return tools
 
 
-def batch_build_modules(tools: list[str], detect_bins: bool = False) -> int:
+def batch_build_modules(tools: list[str]) -> int:
     """Build Lmod modules for multiple tools in sequence.
 
     Args:
         tools: Tool names/specifications (e.g. ``["samtools", "fastqc/0.12.1"]``).
-        detect_bins: Interactively select aliased binaries per tool
-            (local/non-upstream builds only).
 
     Returns:
         0 if all builds succeed, 1 if any fail.
+
+    Note: interactive alias editing (``--edit-aliases``) is not supported in
+    batch mode; each tool builds non-interactively.
     """
     if not tools:
         console.print(ShelleyStyle.create_info_panel(
@@ -69,7 +70,7 @@ def batch_build_modules(tools: list[str], detect_bins: bool = False) -> int:
 
     for i, tool in enumerate(tools, 1):
         console.print(f"\n[header]Building {i}/{total_count}:[/header] [tool]{tool}[/tool]")
-        if build_module(tool, detect_bins=detect_bins):
+        if build_module(tool):
             success_count += 1
             results.append((tool, True, "Success"))
         else:

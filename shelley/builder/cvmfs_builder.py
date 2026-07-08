@@ -17,7 +17,9 @@ import questionary
 from datetime import datetime
 from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
 from shelley.utils import console, ShelleyStyle
-from shelley.builder.guts_integration import extract_aliases, select_aliases
+from shelley.builder.guts_integration import (
+    edit_aliases_interactive, extract_aliases, normalize_aliases,
+)
 
 log = logging.getLogger(__name__)
 
@@ -227,36 +229,20 @@ class CVMFSModuleBuilder:
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
-        local_registry: str = LOCAL_REGISTRY, detect_bins: bool = False,
-        status=None,
-    ) -> None:
+        local_registry: str = LOCAL_REGISTRY, edit_aliases: bool = False,
+        in_upstream: bool = False, status=None,
+    ) -> list[dict]:
         """
-        Create or update a local shpc registry entry for a CVMFS tag absent from
-        the upstream shpc-registry.
+        Create or update a local shpc registry entry, returning the aliases written.
 
         Downloads the upstream container.yaml as a base (preserving other version tags
-        and tool metadata), extracts aliases from the specific SIF via guts diff, adds
-        the SHA256 tag for this version, and writes the result.  Only called when the
-        version is confirmed absent from the upstream registry.
+        and tool metadata) and adds the SHA256 tag for this version.  Aliases come from
+        the upstream entry (when ``in_upstream``) or from a guts diff of the SIF
+        otherwise; when ``edit_aliases`` is set they are edited interactively first.
         """
         registry_dir = Path(local_registry) / uri
         registry_yaml = registry_dir / "container.yaml"
         registry_dir.mkdir(parents=True, exist_ok=True)
-
-        # Extract aliases from the specific SIF being installed.
-        aliases = extract_aliases(container_path)
-        if not aliases:
-            log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
-        elif detect_bins:
-            # Let the user pick which detected binaries to expose. Suspend the
-            # status spinner so the interactive prompt owns the terminal.
-            if status is not None:
-                status.stop()
-            try:
-                aliases = select_aliases(aliases)
-            finally:
-                if status is not None:
-                    status.start()
 
         # Download upstream entry as a base (best-effort; tool may not be in upstream at all)
         remote_url = (
@@ -269,9 +255,27 @@ class CVMFSModuleBuilder:
 
         config = _load_registry_config(uri, registry_yaml)
         if not config:
-            config = {"docker": uri, "tags": {}, "filter": [version], "aliases": aliases}
+            config = {"docker": uri, "tags": {}, "filter": [version]}
+
+        # Source aliases: upstream's curated set, or a guts diff of this SIF.
+        if in_upstream:
+            aliases = normalize_aliases(config.get("aliases") or [])
         else:
-            config["aliases"] = aliases
+            aliases = extract_aliases(container_path)
+            if not aliases:
+                log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
+
+        if edit_aliases:
+            # Suspend the status spinner so the interactive prompt owns the terminal.
+            if status is not None:
+                status.stop()
+            try:
+                aliases = edit_aliases_interactive(aliases)
+            finally:
+                if status is not None:
+                    status.start()
+
+        config["aliases"] = aliases
 
         sha256 = self._compute_sha256(container_path)
         config.setdefault("tags", {})[version] = f"sha256:{sha256}"
@@ -280,12 +284,14 @@ class CVMFSModuleBuilder:
         with open(registry_yaml, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
+        return aliases
+
     def _shpc_uninstall(self, uri_tag: str) -> None:
         """Uninstall an existing shpc entry (best-effort; ignores errors)."""
         subprocess.run([_SHPC, "uninstall", "--force", uri_tag], capture_output=True, text=True)
 
     def shpc_install(self, tool_name: str, version: str,
-                     detect_bins: bool = False, status=None) -> Path:
+                     edit_aliases: bool = False, status=None) -> Path:
         """
         Install a CVMFS container as a functional Lmod module using shpc.
 
@@ -296,9 +302,10 @@ class CVMFSModuleBuilder:
         - Version absent from upstream: uninstall any stale install, create a local
           registry entry with guts-extracted aliases, then call shpc install once.
 
-        When ``detect_bins`` is set, the guts-extracted aliases are presented in an
-        interactive checkbox before writing the local entry (non-upstream path only);
-        ``status`` is the active rich spinner, suspended while the prompt is shown.
+        When ``edit_aliases`` is set, the aliases (upstream or guts-extracted) are
+        edited interactively and written to a local registry entry that shadows any
+        upstream one — so editing works for both build paths.  ``status`` is the
+        active rich spinner, suspended while the prompt is shown.
 
         Returns:
             Path to the symlinked .lua file (the user-facing module path).
@@ -307,26 +314,37 @@ class CVMFSModuleBuilder:
         uri_tag = f"{uri}:{version}"
         container_path = str(self.cvmfs_singularity_path / f"{tool_name}:{version}")
 
-        in_upstream = version in get_registry_tags(tool_name, upstream_only=True)
+        # One upstream fetch gives us both the tag check and the upstream aliases
+        # (used for the empty-alias warning below without a second request).
+        upstream_local_yaml = Path(LOCAL_REGISTRY) / uri / "container.yaml"
+        upstream_config = _load_registry_config(uri, upstream_local_yaml, force_upstream=True)
+        in_upstream = version in upstream_config.get("tags", {})
 
-        if not in_upstream:
-            # Version absent from upstream — uninstall stale build, create local entry.
+        # Edited builds always route through a local entry so edits persist and shadow
+        # upstream; unedited upstream builds install directly from the upstream registry.
+        create_local = (not in_upstream) or edit_aliases
+
+        final_aliases: list[dict]
+        if create_local:
             self._shpc_uninstall(uri_tag)
-            self._ensure_local_registry_entry(
+            final_aliases = self._ensure_local_registry_entry(
                 tool_name, version, container_path, uri,
-                detect_bins=detect_bins, status=status,
+                edit_aliases=edit_aliases, in_upstream=in_upstream, status=status,
             )
             self._register_local_registry(LOCAL_REGISTRY)
-            console.print(ShelleyStyle.create_warning_panel(
-                "Tag not in registry",
-                f"{uri}:{version} is not in the upstream shpc-registry. "
-                f"A local entry has been created in {LOCAL_REGISTRY}.",
-            ))
+            if not in_upstream:
+                console.print(ShelleyStyle.create_warning_panel(
+                    "Tag not in registry",
+                    f"{uri}:{version} is not in the upstream shpc-registry. "
+                    f"A local entry has been created in {LOCAL_REGISTRY}.",
+                ))
+        else:
+            final_aliases = normalize_aliases(upstream_config.get("aliases") or [])
 
         returncode, output = self._run_shpc_install(uri_tag, container_path)
 
-        if returncode and in_upstream:
-            # Path-exists conflict on upstream tool — uninstall and retry once.
+        if returncode and not create_local:
+            # Path-exists conflict on a pure upstream install — uninstall and retry once.
             self._shpc_uninstall(uri_tag)
             returncode, output = self._run_shpc_install(uri_tag, container_path)
 
@@ -357,6 +375,14 @@ class CVMFSModuleBuilder:
         if dest.is_symlink() or dest.exists():
             dest.unlink()
         dest.symlink_to(src)
+
+        if not edit_aliases and not final_aliases:
+            console.print(ShelleyStyle.create_warning_panel(
+                "No aliases",
+                f"{uri_tag} exposes no command aliases, so the module has no "
+                f"wrapper scripts. Rebuild with --edit-aliases to add some:\n\n"
+                f"shelley build {tool_name}/{version} --edit-aliases",
+            ))
 
         return dest
 

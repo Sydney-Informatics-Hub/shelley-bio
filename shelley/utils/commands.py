@@ -13,7 +13,7 @@ CORE_COMMANDS = [
     {"command": "search <description>",
      "description": "Search for tools by function",
      "example": "search quality control"},
-    {"command": r"build <tool\[/version]> [--detect-bins]",
-     "description": "Build Lmod module for tool; --detect-bins to pick aliased binaries",
+    {"command": r"build <tool\[/version]> [--edit-aliases]",
+     "description": "Build Lmod module for tool; --edit-aliases to edit aliased binaries",
      "example": "build samtools/1.21"},
 ]

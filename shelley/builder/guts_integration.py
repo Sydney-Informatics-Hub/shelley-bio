@@ -80,12 +80,32 @@ def extract_aliases(cvmfs_path: str) -> list[dict]:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def select_aliases(aliases: list[dict]) -> list[dict]:
-    """Prompt the user to choose which detected binaries become aliases.
+def normalize_aliases(aliases) -> list[dict]:
+    """Return aliases in the canonical ``[{"name", "command"}]`` list form.
 
-    Presents an interactive checkbox of the ``extract_aliases`` candidates, all
-    pre-checked so accepting the default reproduces the non-interactive result.
-    Returns the chosen subset (order preserved).
+    shpc registries store aliases either as a ``{name: command}`` dict (upstream
+    shpc-registry ``container.yaml``) or as a list of ``{"name", "command"}``
+    dicts (what shelley writes). Accept either and return the list form so the
+    rest of the code has a single shape to work with.
+    """
+    if not aliases:
+        return []
+    if isinstance(aliases, dict):
+        return [{"name": name, "command": command} for name, command in aliases.items()]
+    return [{"name": a["name"], "command": a["command"]} for a in aliases]
+
+
+def _cancelled(value) -> bool:
+    """questionary returns None from .ask() when the user aborts (Ctrl-C/ESC)."""
+    return value is None
+
+
+def select_aliases(aliases: list[dict]) -> list[dict]:
+    """Prompt the user to choose which binaries to keep as aliases.
+
+    Presents an interactive checkbox of the candidates, all pre-checked so
+    accepting the default keeps everything. Returns the chosen subset (order
+    preserved).
 
     Raises:
         ValueError: If the user cancels the selection.
@@ -98,11 +118,118 @@ def select_aliases(aliases: list[dict]) -> list[dict]:
         for a in aliases
     ]
     selected = questionary.checkbox(
-        "Select which binaries to expose as aliases:",
+        "Select which binaries to expose as aliases (selected binaries can be edited in the next step):",
         choices=choices,
+        instruction="(↑↓ move · space toggle · ctrl-a select all · type to filter · enter confirm)",
+        use_search_filter=True,
+        use_jk_keys=False,  # required: j/k conflict with the search filter
     ).ask()
 
-    if selected is None:
+    if _cancelled(selected):
         raise ValueError("Alias selection cancelled.")
 
     return selected
+
+
+def _rename_aliases(aliases: list[dict]) -> list[dict]:
+    """Optionally rename the invocation name of selected aliases (command kept)."""
+    if not aliases:
+        return aliases
+
+    if not questionary.confirm(
+        "Rename any aliases?",
+        default=False,
+        instruction="()",
+    ).ask():
+        return aliases
+
+    to_rename = questionary.checkbox(
+        "Select aliases to rename:",
+        choices=[questionary.Choice(title=a["name"], value=a) for a in aliases],
+        instruction="(↑↓ move · space toggle · enter confirm)",
+    ).ask()
+    if _cancelled(to_rename):
+        raise ValueError("Alias rename cancelled.")
+
+    for alias in to_rename:
+        new_name = questionary.text(
+            f"New name for '{alias['name']}':",
+            default=alias["name"],
+            instruction="(invocation name only; the binary it runs is unchanged)",
+        ).ask()
+        if _cancelled(new_name):
+            raise ValueError("Alias rename cancelled.")
+        new_name = new_name.strip()
+        if new_name:
+            alias["name"] = new_name
+
+    return aliases
+
+
+def _add_aliases(aliases: list[dict], require_confirm: bool = True) -> list[dict]:
+    """Append new aliases the user types in by hand.
+
+    When ``require_confirm`` is set, gate the whole step behind a yes/no prompt;
+    callers that already know the user needs to add aliases (e.g. a container with
+    none detected) pass ``False`` to drop straight into the add loop.
+    """
+    if require_confirm and not questionary.confirm(
+        "Add new aliases?",
+        default=False,
+        instruction="",
+    ).ask():
+        return aliases
+
+    while True:
+        name = questionary.text(
+            "Alias name:",
+            instruction="(what you type to run the tool; blank to stop)",
+        ).ask()
+        if _cancelled(name):
+            raise ValueError("Alias add cancelled.")
+        name = name.strip()
+        if not name:
+            break
+
+        command = questionary.text(
+            "Command/binary:",
+            default=name,
+            instruction="(the executable inside the container e.g. /usr/local/bin/<tool_name>)",
+        ).ask()
+        if _cancelled(command):
+            raise ValueError("Alias add cancelled.")
+        command = command.strip() or name
+
+        aliases.append({"name": name, "command": command})
+
+        if not questionary.confirm("Add another?", default=False).ask():
+            break
+
+    return aliases
+
+
+def edit_aliases_interactive(aliases: list[dict]) -> list[dict]:
+    """Interactively deselect, rename, and add module aliases.
+
+    Runs three questionary steps in sequence — a pre-checked deselect checkbox,
+    an optional rename pass (invocation name only), and an optional add loop —
+    and returns the resulting canonical ``[{"name", "command"}]`` list.
+
+    Raises:
+        ValueError: If the user cancels any step.
+    """
+    aliases = normalize_aliases(aliases)
+    if not aliases:
+        # Nothing was detected — tell the user and go straight into adding.
+        questionary.print(
+            "No aliases were detected for this container. Add one or more so the "
+            "module exposes a command to run.",
+            style="bold fg:yellow",
+        )
+        aliases = _add_aliases(aliases, require_confirm=False)
+        return aliases
+
+    aliases = select_aliases(aliases)
+    aliases = _add_aliases(aliases)
+    aliases = _rename_aliases(aliases)
+    return aliases

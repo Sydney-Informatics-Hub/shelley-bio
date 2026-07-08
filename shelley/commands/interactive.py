@@ -54,10 +54,10 @@ def interactive_mode() -> None:
             else:
                 print_warning("Usage: search <description>")
         elif cmd == "build":
-            detect_bins, positional = parse_build_flags(parts[1:])
+            edit_aliases, positional = parse_build_flags(parts[1:])
             if positional:
-                build_module(positional[0], detect_bins=detect_bins)
+                build_module(positional[0], edit_aliases=edit_aliases)
             else:
-                print_warning("Usage: build <tool_name>[/version] [--detect-bins]")
+                print_warning("Usage: build <tool_name>[/version] [--edit-aliases]")
         else:
             print_warning(f"Unknown command: '{cmd}'. Type help for usage.")

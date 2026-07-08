@@ -25,15 +25,15 @@ def parse_verbosity(args: list[str]) -> tuple[int, list[str]]:
 def parse_build_flags(args: list[str]) -> tuple[bool, list[str]]:
     """Split ``build`` flags from positional args.
 
-    Recognises ``--detect-bins``, which opts into interactively selecting which
-    detected binaries become aliases (local/non-upstream builds only). Returns
-    ``(detect_bins, positionals)``.
+    Recognises ``--edit-aliases``, which opens an interactive editor to deselect,
+    rename, and add the aliases exposed by the module (both upstream and local
+    builds). Returns ``(edit_aliases, positionals)``.
     """
-    detect_bins = False
+    edit_aliases = False
     positional: list[str] = []
     for arg in args:
-        if arg == "--detect-bins":
-            detect_bins = True
+        if arg == "--edit-aliases":
+            edit_aliases = True
         else:
             positional.append(arg)
-    return detect_bins, positional
+    return edit_aliases, positional
