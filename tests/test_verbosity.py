@@ -38,12 +38,16 @@ def test_build_flags_none():
     assert parse_build_flags(["samtools/1.21"]) == (False, ["samtools/1.21"])
 
 
-def test_build_flags_edit_aliases():
-    assert parse_build_flags(["samtools/1.21", "--edit-aliases"]) == (True, ["samtools/1.21"])
+def test_build_flags_interactive_long():
+    assert parse_build_flags(["samtools/1.21", "--interactive"]) == (True, ["samtools/1.21"])
 
 
-def test_build_flags_edit_aliases_before_positional():
-    assert parse_build_flags(["--edit-aliases", "samtools/1.21"]) == (True, ["samtools/1.21"])
+def test_build_flags_interactive_short():
+    assert parse_build_flags(["samtools/1.21", "-i"]) == (True, ["samtools/1.21"])
+
+
+def test_build_flags_interactive_before_positional():
+    assert parse_build_flags(["-i", "samtools/1.21"]) == (True, ["samtools/1.21"])
 
 
 def test_stacked_long_flags():

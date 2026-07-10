@@ -1,4 +1,4 @@
-"""Tests for the interactive alias editor used by `build --edit-aliases`."""
+"""Tests for the interactive alias editor used by `build -i/--interactive`."""
 
 from unittest.mock import MagicMock, patch
 

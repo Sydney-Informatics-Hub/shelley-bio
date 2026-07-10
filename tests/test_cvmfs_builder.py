@@ -221,7 +221,7 @@ def test_shpc_install_hard_failure_raises(builder, tmp_path):
 
 
 def test_shpc_install_warns_when_no_aliases(builder, tmp_path):
-    """Empty aliases + no --edit-aliases → a warning panel suggests rebuilding."""
+    """Empty aliases + no -i/--interactive → a warning panel suggests rebuilding."""
     tool, version = "bandage", "0.8.1--hc9558a2_0"
     shpc_base = tmp_path / "shpc_modules"
     src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
@@ -297,7 +297,7 @@ def test_build_no_version(mock_builder_cls):
 
     assert result is True
     mock_builder_cls.shpc_install.assert_called_once_with(
-        "samtools", "1.23.1--ha83d96e_0", edit_aliases=False, status=None)
+        "samtools", "1.23.1--ha83d96e_0", interactive=False, status=None)
 
 
 def test_build_short_version(mock_builder_cls):
@@ -306,7 +306,7 @@ def test_build_short_version(mock_builder_cls):
 
     assert result is True
     mock_builder_cls.shpc_install.assert_called_once_with(
-        "samtools", "1.21--h96c455f_1", edit_aliases=False, status=None)
+        "samtools", "1.21--h96c455f_1", interactive=False, status=None)
 
 
 def test_build_full_tag(mock_builder_cls):
@@ -315,7 +315,7 @@ def test_build_full_tag(mock_builder_cls):
 
     assert result is True
     mock_builder_cls.shpc_install.assert_called_once_with(
-        "samtools", "1.21--h96c455f_1", edit_aliases=False, status=None)
+        "samtools", "1.21--h96c455f_1", interactive=False, status=None)
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +400,35 @@ def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
+
+
+def test_shpc_install_upstream_with_edit_reroutes_to_local(builder, tmp_path):
+    """Editing an UPSTREAM tool must still create a local entry (the reroute).
+
+    Regression guard: `--interactive` on a remote-registry version has to build
+    through a local shpc registry entry so the edits persist and shadow upstream.
+    """
+    tool, version = "bcftools", "1.16--haef29d1_2"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}), \
+         patch.object(builder, "_register_local_registry") as mock_register, \
+         patch.object(builder, "_ensure_local_registry_entry",
+                      return_value=[{"name": tool, "command": tool}]) as mock_ensure:
+        builder.shpc_install(tool, version, interactive=True)
+
+    # in_upstream is True, but interactive forces the local-registry route.
+    mock_ensure.assert_called_once()
+    assert mock_ensure.call_args.kwargs.get("in_upstream") is True
+    assert mock_ensure.call_args.kwargs.get("interactive") is True
+    mock_register.assert_called_once()
 
 
 def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
@@ -507,8 +536,8 @@ def _read_aliases(local_registry, tool):
     )["aliases"]
 
 
-def test_ensure_local_registry_entry_edit_aliases_narrows(builder, tmp_path):
-    """edit_aliases=True → edit_aliases_interactive result is what gets written."""
+def test_ensure_local_registry_entry_interactive_narrows(builder, tmp_path):
+    """interactive=True → edit_aliases_interactive result is what gets written."""
     tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
     local_registry = tmp_path / "registry"
     container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
@@ -528,7 +557,7 @@ def test_ensure_local_registry_entry_edit_aliases_narrows(builder, tmp_path):
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
         written = builder._ensure_local_registry_entry(
             tool, version, container_path, f"quay.io/biocontainers/{tool}",
-            local_registry=str(local_registry), edit_aliases=True,
+            local_registry=str(local_registry), interactive=True,
         )
 
     mock_edit.assert_called_once_with(detected)
@@ -537,7 +566,7 @@ def test_ensure_local_registry_entry_edit_aliases_narrows(builder, tmp_path):
 
 
 def test_ensure_local_registry_entry_no_edit_keeps_all(builder, tmp_path):
-    """edit_aliases=False (default) → no prompt; all detected aliases are written."""
+    """interactive=False (default) → no prompt; all detected aliases are written."""
     tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
     local_registry = tmp_path / "registry"
     container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
@@ -586,7 +615,7 @@ def test_ensure_local_registry_entry_upstream_edits_upstream_aliases(builder, tm
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
         written = builder._ensure_local_registry_entry(
             tool, version, container_path, f"quay.io/biocontainers/{tool}",
-            local_registry=str(local_registry), edit_aliases=True, in_upstream=True,
+            local_registry=str(local_registry), interactive=True, in_upstream=True,
         )
 
     mock_extract.assert_not_called()

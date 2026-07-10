@@ -25,15 +25,15 @@ def parse_verbosity(args: list[str]) -> tuple[int, list[str]]:
 def parse_build_flags(args: list[str]) -> tuple[bool, list[str]]:
     """Split ``build`` flags from positional args.
 
-    Recognises ``--edit-aliases``, which opens an interactive editor to deselect,
-    rename, and add the aliases exposed by the module (both upstream and local
-    builds). Returns ``(edit_aliases, positionals)``.
+    Recognises ``--interactive``/``-i``, which opens an interactive session to
+    curate the aliases the module exposes — deselect, rename, and add — for both
+    upstream and local builds. Returns ``(interactive, positionals)``.
     """
-    edit_aliases = False
+    interactive = False
     positional: list[str] = []
     for arg in args:
-        if arg == "--edit-aliases":
-            edit_aliases = True
+        if arg in ("--interactive", "-i"):
+            interactive = True
         else:
             positional.append(arg)
-    return edit_aliases, positional
+    return interactive, positional

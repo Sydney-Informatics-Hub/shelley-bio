@@ -241,7 +241,7 @@ class CVMFSModuleBuilder:
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
-        local_registry: str = LOCAL_REGISTRY, edit_aliases: bool = False,
+        local_registry: str = LOCAL_REGISTRY, interactive: bool = False,
         in_upstream: bool = False, status=None,
     ) -> list[dict]:
         """
@@ -250,7 +250,7 @@ class CVMFSModuleBuilder:
         Downloads the upstream container.yaml as a base (preserving other version tags
         and tool metadata) and adds the SHA256 tag for this version.  Aliases come from
         the upstream entry (when ``in_upstream``) or from a guts diff of the SIF
-        otherwise; when ``edit_aliases`` is set they are edited interactively first.
+        otherwise; when ``interactive`` is set they are curated interactively first.
         """
         registry_dir = Path(local_registry) / uri
         registry_yaml = registry_dir / "container.yaml"
@@ -277,7 +277,7 @@ class CVMFSModuleBuilder:
             if not aliases:
                 log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
 
-        if edit_aliases:
+        if interactive:
             # Suspend the status spinner so the interactive prompt owns the terminal.
             if status is not None:
                 status.stop()
@@ -303,7 +303,7 @@ class CVMFSModuleBuilder:
         subprocess.run([_shpc_bin(), "uninstall", "--force", uri_tag], capture_output=True, text=True)
 
     def shpc_install(self, tool_name: str, version: str,
-                     edit_aliases: bool = False, status=None) -> Path:
+                     interactive: bool = False, status=None) -> Path:
         """
         Install a CVMFS container as a functional Lmod module using shpc.
 
@@ -314,9 +314,9 @@ class CVMFSModuleBuilder:
         - Version absent from upstream: uninstall any stale install, create a local
           registry entry with guts-extracted aliases, then call shpc install once.
 
-        When ``edit_aliases`` is set, the aliases (upstream or guts-extracted) are
-        edited interactively and written to a local registry entry that shadows any
-        upstream one — so editing works for both build paths.  ``status`` is the
+        When ``interactive`` is set, the aliases (upstream or guts-extracted) are
+        curated interactively and written to a local registry entry that shadows any
+        upstream one — so curation works for both build paths.  ``status`` is the
         active rich spinner, suspended while the prompt is shown.
 
         Returns:
@@ -334,14 +334,14 @@ class CVMFSModuleBuilder:
 
         # Edited builds always route through a local entry so edits persist and shadow
         # upstream; unedited upstream builds install directly from the upstream registry.
-        create_local = (not in_upstream) or edit_aliases
+        create_local = (not in_upstream) or interactive
 
         final_aliases: list[dict]
         if create_local:
             self._shpc_uninstall(uri_tag)
             final_aliases = self._ensure_local_registry_entry(
                 tool_name, version, container_path, uri,
-                edit_aliases=edit_aliases, in_upstream=in_upstream, status=status,
+                interactive=interactive, in_upstream=in_upstream, status=status,
             )
             self._register_local_registry(LOCAL_REGISTRY)
             if not in_upstream:
@@ -388,12 +388,12 @@ class CVMFSModuleBuilder:
             dest.unlink()
         dest.symlink_to(src)
 
-        if not edit_aliases and not final_aliases:
+        if not interactive and not final_aliases:
             console.print(ShelleyStyle.create_warning_panel(
                 "No aliases",
                 f"{uri_tag} exposes no command aliases, so the module has no "
-                f"wrapper scripts. Rebuild with --edit-aliases to add some:\n\n"
-                f"shelley build {tool_name}/{version} --edit-aliases",
+                f"wrapper scripts. Rebuild with -i/--interactive to add some:\n\n"
+                f"shelley build {tool_name}/{version} --interactive",
             ))
 
         return dest

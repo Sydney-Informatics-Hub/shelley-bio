@@ -78,7 +78,7 @@ def test_main_non_file_arg_calls_single(monkeypatch):
         with pytest.raises(SystemExit) as exc:
             main()
         assert exc.value.code == 0
-        mock_single.assert_called_once_with("samtools", edit_aliases=False)
+        mock_single.assert_called_once_with("samtools", interactive=False)
         mock_batch.assert_not_called()
 
 

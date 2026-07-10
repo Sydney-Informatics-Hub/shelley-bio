@@ -58,10 +58,10 @@ def main() -> None:
         sys.exit(0)
 
     if command == "build" and len(sys.argv) > 2:
-        edit_aliases, positional = parse_build_flags(sys.argv[2:])
+        interactive, positional = parse_build_flags(sys.argv[2:])
         if not positional:
             print_warning("Missing tool name or tools file")
-            print_info("Usage: [command]shelley build <tool\\[/version]> [--edit-aliases][/command]")
+            print_info("Usage: [command]shelley build <tool\\[/version]> [-i|--interactive][/command]")
             sys.exit(1)
         arg = positional[0]
         p = Path(arg)
@@ -71,7 +71,7 @@ def main() -> None:
                 print_warning(f"No tool specs found in '{arg}' (file is empty or all comments)")
                 sys.exit(1)
             sys.exit(batch_build_modules(tools))
-        sys.exit(0 if build_module(arg, edit_aliases=edit_aliases) else 1)
+        sys.exit(0 if build_module(arg, interactive=interactive) else 1)
 
     if command == "find":
         verbosity, positional = parse_verbosity(sys.argv[2:])

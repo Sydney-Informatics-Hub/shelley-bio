@@ -34,8 +34,8 @@ def batch_build_modules(tools: list[str]) -> int:
     Returns:
         0 if all builds succeed, 1 if any fail.
 
-    Note: interactive alias editing (``--edit-aliases``) is not supported in
-    batch mode; each tool builds non-interactively.
+    Note: interactive alias curation (``-i``/``--interactive``) is not supported
+    in batch mode; each tool builds non-interactively.
     """
     if not tools:
         console.print(ShelleyStyle.create_info_panel(
