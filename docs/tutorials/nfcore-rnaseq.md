@@ -20,6 +20,8 @@ This tutorial walks you through how to install an nf-core pipeline, and run an e
 
 ## Scratch
 
+### Basic nf-core and singularity usage
+
 nf-core requires several steps to complete the environment setup. THe BioShell comes with these configured by default, and can be module loaded see https://nf-co.re/docs/get_started/environment_setup/overview
 
 module avail
@@ -40,7 +42,7 @@ Use "module spider" to find all possible modules and extensions.
 Use "module keyword key1 key2 ..." to search for all possible modules matching any of the
 "keys".
 
-module load shpc singularity nextflow
+module load shpc singularity nextflow nf-core
 ubuntu@shelley-dev-sa:~$ module avail
 
 ------------------------------ /apps/Modules/modulefiles ------------------------------
@@ -55,9 +57,34 @@ ubuntu@shelley-dev-sa:~$ module avail
 
 * Now should show the tools we need are avaialble
 
-## TODO:
+```
+nextflow run nf-core/demo -profile test,singularity --outdir results
+```
 
-etc/skel/data
-* samplesheet
-* minimal fastq
-* bioshell.config
+message:                                        
+  bash: line 1: singularity: command not found  
+
+```bash
+module load singularity
+```
+
+```
+nextflow run nf-core/demo -profile test,singularity --outdir results
+```
+
+Success
+
+What to point out?
+
+* Pulls images. In this example it was quick because containers are small
+
+#### Next running nf-core/rnaseq
+
+* nfcore rnaseq command
+* Run nextflow inspect to show containers required
+* pass in config file
+* Run, fails because missing container
+* Run shelley find <container> -vv to show cvmfs path
+* Copy paste into config file
+* Repeat with another to complete, self-directed/fold out
+* Run the pipeline
