@@ -24,8 +24,11 @@ def resolve_shelley_executable() -> str | None:
     return shutil.which("shelley")
 
 
-def build_module(tool_spec: str) -> bool:
+def build_module(tool_spec: str, interactive: bool = False) -> bool:
     """Build an Lmod module for a tool from CVMFS.
+
+    ``interactive`` opens a session to curate the aliases the module exposes —
+    deselect, rename, and add — for both upstream and local builds.
 
     Returns True if the build succeeded, False otherwise.
     """
@@ -43,6 +46,8 @@ def build_module(tool_spec: str) -> bool:
             "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
             shelley_path, "build", tool_spec,
         ]
+        if interactive:
+            cmd.append("--interactive")
 
         try:
             print_info(f"Running with elevated privileges: build {tool_spec}")
@@ -77,7 +82,9 @@ def build_module(tool_spec: str) -> bool:
         final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
 
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            module_file = builder.shpc_install(final_tool, final_version)
+            module_file = builder.shpc_install(
+                final_tool, final_version, interactive=interactive, status=status,
+            )
             available_versions = builder.list_versions(tool_name)
 
         if requested_version is None and len(available_versions) > 1:

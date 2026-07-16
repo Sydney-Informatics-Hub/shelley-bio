@@ -164,7 +164,12 @@ def test_search_missing_arg_warns():
 
 def test_build_dispatches():
     mocks = _run(["build samtools", "exit"])
-    mocks["build"].assert_called_once_with("samtools")
+    mocks["build"].assert_called_once_with("samtools", interactive=False)
+
+
+def test_build_interactive_flag():
+    mocks = _run(["build samtools -i", "exit"])
+    mocks["build"].assert_called_once_with("samtools", interactive=True)
 
 
 def test_build_missing_arg_warns():

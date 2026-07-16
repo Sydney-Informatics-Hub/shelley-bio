@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from shelley.utils.args import parse_verbosity
+from shelley.utils.args import parse_build_flags, parse_verbosity
 from shelley.utils.cache import compute_build_entries
 
 
@@ -28,6 +28,26 @@ def test_double_short_flag():
 
 def test_stacked_short_flags():
     assert parse_verbosity(["-v", "samtools", "-v"]) == (2, ["samtools"])
+
+
+# ---------------------------------------------------------------------------
+# parse_build_flags
+# ---------------------------------------------------------------------------
+
+def test_build_flags_none():
+    assert parse_build_flags(["samtools/1.21"]) == (False, ["samtools/1.21"])
+
+
+def test_build_flags_interactive_long():
+    assert parse_build_flags(["samtools/1.21", "--interactive"]) == (True, ["samtools/1.21"])
+
+
+def test_build_flags_interactive_short():
+    assert parse_build_flags(["samtools/1.21", "-i"]) == (True, ["samtools/1.21"])
+
+
+def test_build_flags_interactive_before_positional():
+    assert parse_build_flags(["-i", "samtools/1.21"]) == (True, ["samtools/1.21"])
 
 
 def test_stacked_long_flags():

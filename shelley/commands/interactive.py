@@ -3,18 +3,16 @@
 from .build import build_module
 from .find import find_tool_sync
 from .search import search_tools
-from ..utils.args import parse_verbosity
+from ..utils.args import parse_build_flags, parse_verbosity
+from ..utils.commands import CORE_COMMANDS
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_rule,
     print_warning, print_info, print_success,
 )
 
-_COMMANDS = [
-    {"command": "find <tool> [-v|-vv]", "description": "Find a tool; -v all versions, -vv adds paths", "example": "find fastqc"},
-    {"command": "search <terms>",       "description": "Search for tools by description",   "example": "search quality control"},
-    {"command": r"build <tool\[/ver]>", "description": "Build an Lmod module for a tool",   "example": "build samtools/1.21"},
-    {"command": "help",                 "description": "Show this help table",              "example": "help"},
-    {"command": "exit",                 "description": "Exit interactive mode",             "example": "exit"},
+_COMMANDS = CORE_COMMANDS + [
+    {"command": "help", "description": "Show this help table",  "example": "help"},
+    {"command": "exit", "description": "Exit interactive mode", "example": "exit"},
 ]
 
 
@@ -56,9 +54,10 @@ def interactive_mode() -> None:
             else:
                 print_warning("Usage: search <description>")
         elif cmd == "build":
-            if len(parts) > 1:
-                build_module(parts[1])
+            interactive, positional = parse_build_flags(parts[1:])
+            if positional:
+                build_module(positional[0], interactive=interactive)
             else:
-                print_warning("Usage: build <tool_name>[/version]")
+                print_warning("Usage: build <tool_name>[/version] [-i|--interactive]")
         else:
             print_warning(f"Unknown command: '{cmd}'. Type help for usage.")
