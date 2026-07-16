@@ -10,7 +10,7 @@ bioinformatics software from CVMFS repositories.
 # check (shelley/utils/update_check.py) compares it against this same value on
 # the main branch. To release: bump here, update CHANGELOG.md, and tag vX.Y.Z.
 # See docs/how-to/developer-setup.md ("Versioning & update check").
-__version__ = "0.0.1"
+__version__ = "0.2.0"
 
 from .client.cli import main as cli_main
 from .builder.cvmfs_builder import CVMFSModuleBuilder

@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-16
+
 ### Added
 
 - `shelley find <tool> -vv` — lists every individual container build (one row per
   `--hash`) with buildable/installed status and the full CVMFS container path.
+- `shelley build <tool> -i` (`--interactive`) — opens an interactive session to
+  curate the aliases a module exposes (deselect, rename, and add) for both
+  upstream and local builds.
+- Update check — on startup shelley compares its version against the `main`
+  branch and prints upgrade instructions when a newer release is available. The
+  result is cached for a day and fails silently on any network error.
 
 ### Changed
 
@@ -20,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `versions` command. Use `shelley find <tool> -v` instead.
+
+### Fixed
+
+- `shpc` and `singularity` are now loaded only when required.
 
 ## [0.1.0] - 2026-07-03
 
@@ -39,4 +51,5 @@ First tagged release.
 - Installation guide covering system-wide (`uv tool install` into `/opt`),
   per-user, and `uvx` (experimental) paths.
 
+[0.2.0]: https://github.com/Sydney-Informatics-Hub/shelley/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Sydney-Informatics-Hub/shelley/releases/tag/v0.1.0
