@@ -84,6 +84,24 @@ def test_select_aliases_cancel_raises():
             select_aliases(aliases)
 
 
+def test_select_aliases_choices_start_unchecked():
+    """Regression: choices must NOT be pre-checked.
+
+    With ``use_search_filter``, the filter only hides rows — it never unchecks
+    them — so pre-checking everything returns the whole list regardless of what
+    the user filtered to. Starting unchecked is what makes "filter → check the
+    one you want → enter" return just that one.
+    """
+    aliases = [{"name": "plassembler.py", "command": "/usr/local/bin/plassembler.py"},
+               {"name": "log.py", "command": "/usr/local/bin/log.py"}]
+    stub = _scripted_questionary(checkbox=[[aliases[0]]])
+    with patch("shelley.builder.guts_integration.questionary", stub):
+        select_aliases(aliases)
+
+    passed_choices = stub.checkbox.call_args.kwargs["choices"]
+    assert [c.checked for c in passed_choices] == [False, False]
+
+
 # ---------------------------------------------------------------------------
 # edit_aliases_interactive (deselect -> rename -> add)
 # ---------------------------------------------------------------------------
@@ -136,6 +154,31 @@ def test_edit_add_command_defaults_to_name():
     with patch("shelley.builder.guts_integration.questionary", stub):
         result = edit_aliases_interactive([])
     assert result == [{"name": "bandage", "command": "bandage"}]
+
+
+def test_edit_plassembler_flow_keeps_only_selected_with_real_binary():
+    """The plassembler failing case: from a large upstream alias set, keep only
+    plassembler.py and rename it to plassembler.
+
+    The result must be a single alias whose command is the real in-container
+    binary (``/usr/local/bin/plassembler.py``) — not the bare module name
+    ``plassembler`` (which does not exist in the container and made the built
+    module fail to run), and none of the other candidates leak through.
+    """
+    source = {
+        "plassembler.py": "/usr/local/bin/plassembler.py",
+        "log.py": "/usr/local/bin/log.py",
+        "capnpc-c++": "/usr/local/bin/capnpc-c++",
+    }
+    plassembler = {"name": "plassembler.py", "command": "/usr/local/bin/plassembler.py"}
+    stub = _scripted_questionary(
+        checkbox=[[plassembler], [plassembler]],  # select keeps only plassembler.py; rename picks it
+        confirm=[False, True],                    # add? no; rename? yes
+        text=["plassembler"],                     # new invocation name
+    )
+    with patch("shelley.builder.guts_integration.questionary", stub):
+        result = edit_aliases_interactive(source)
+    assert result == [{"name": "plassembler", "command": "/usr/local/bin/plassembler.py"}]
 
 
 def test_edit_cancel_raises():

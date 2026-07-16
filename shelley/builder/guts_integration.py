@@ -103,8 +103,11 @@ def _cancelled(value) -> bool:
 def select_aliases(aliases: list[dict]) -> list[dict]:
     """Prompt the user to choose which binaries to keep as aliases.
 
-    Presents an interactive checkbox of the candidates, all pre-checked so
-    accepting the default keeps everything. Returns the chosen subset (order
+    Presents an interactive checkbox of the candidates, all *unchecked* so the
+    user checks only the binaries they want. Choices start unchecked because
+    the search filter (``use_search_filter``) only hides rows from view — it
+    never unchecks them — so pre-checking everything would return the whole list
+    regardless of what the user filtered to. Returns the chosen subset (order
     preserved).
 
     Raises:
@@ -114,13 +117,13 @@ def select_aliases(aliases: list[dict]) -> list[dict]:
         return aliases
 
     choices = [
-        questionary.Choice(title=a["name"], value=a, checked=True)
+        questionary.Choice(title=a["name"], value=a, checked=False)
         for a in aliases
     ]
     selected = questionary.checkbox(
         "Select which binaries to expose as aliases (these can be renamed in the next step):",
         choices=choices,
-        instruction="(↑↓ move · space toggle · ctrl-a select all · type to filter · enter confirm)",
+        instruction="(↑↓ move · type to filter · space to check the ones you want · enter confirm)",
         use_search_filter=True,
         use_jk_keys=False,  # required: j/k conflict with the search filter
     ).ask()
