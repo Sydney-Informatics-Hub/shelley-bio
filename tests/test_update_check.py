@@ -83,4 +83,5 @@ def test_cache_prevents_second_fetch(monkeypatch):
 def test_notice_contains_upgrade_command():
     notice = update_check.format_update_notice("9.9.9")
     assert "9.9.9" in notice
-    assert "uv tool upgrade shelley" in notice
+    assert "uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley" in notice
+    assert "uv tool update-shell" in notice

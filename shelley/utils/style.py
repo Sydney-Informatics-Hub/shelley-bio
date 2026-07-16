@@ -356,9 +356,9 @@ class ShelleyStyle:
         
         examples = [
             ("Find a specific tool", "shelley find fastqc"),
+            ("List available versions", "shelley find fastqc -v"),
             ("Search by functionality", "shelley search 'quality control'"),  
             ("Search for RNA-seq tools", "shelley search 'RNA sequencing'"),
-            ("List available versions", "shelley versions samtools"),
             ("Build latest version", "shelley build samtools"),
             ("Build specific version", "shelley build samtools/1.21"),
             ("Interactive mode", "shelley interactive")
@@ -499,7 +499,13 @@ def print_update_notice():
 
     latest = check_for_update()
     if latest:
-        console.print(format_update_notice(latest))
+        console.print(Panel(
+            format_update_notice(latest),
+            title="[status.warning]⬆️  Update available[/status.warning]",
+            box=ROUNDED,
+            border_style="warning",
+            padding=(1, 2),
+        ))
 
 def print_about():
     """Print about information."""

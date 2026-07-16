@@ -9,8 +9,9 @@ and fails silently on any error so it can never break or slow a real command.
 Networking uses only the standard library (mirrors shelley/scripts/build_rsec_meta.py).
 
 Developers: the repo/branch this points at is the DEVELOPER CONFIG block below.
-The upgrade command surfaced to users is kept in sync with the ``### Upgrade``
-section of docs/how-to/install.md.
+The upgrade command surfaced to users is the self-service path, kept in sync with
+the "Install a newer version for yourself (per-user)" section of
+docs/how-to/install.md.
 """
 
 from __future__ import annotations
@@ -33,10 +34,11 @@ BRANCH = "main"
 MAIN_INIT_URL = (
     f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/shelley/__init__.py"
 )
-# The canonical upgrade command — keep in sync with docs/how-to/install.md.
+# The self-service upgrade command surfaced to users — keep in sync with the
+# per-user install section of docs/how-to/install.md.
 UPGRADE_COMMAND = (
-    "sudo env UV_TOOL_DIR=/opt/uv/tools UV_TOOL_BIN_DIR=/usr/local/bin "
-    "/opt/uv/uv tool upgrade shelley"
+    "uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley "
+    "&& uv tool update-shell"
 )
 # ---------------------------------------------------------------------------
 
@@ -124,12 +126,17 @@ def check_for_update() -> Optional[str]:
 
 
 def format_update_notice(latest: str) -> str:
-    """Rich-markup notice telling the user a newer shelley exists and how to get it."""
+    """Rich-markup body telling the user a newer shelley exists and how to get it.
+
+    Returns the panel *body* only; the caller (``style.print_update_notice``)
+    wraps it in a titled Panel. Kept as a plain string so this module stays free
+    of any ``rich`` import.
+    """
     return (
-        f"[status.warning]⬆️  A newer shelley is available: "
-        f"[version]{latest}[/version] (you have [version]{__version__}[/version])[/status.warning]\n"
-        f"[header]Upgrade:[/header]\n"
-        f"[command]{UPGRADE_COMMAND}[/command]\n"
-        f"[muted]See docs/how-to/install.md#upgrade — "
+        f"[status.warning]A newer shelley is available:[/status.warning] "
+        f"[version]{latest}[/version] [muted](you have {__version__})[/muted]\n\n"
+        f"[header]Upgrade & restart your shell:[/header]\n"
+        f"[command]{UPGRADE_COMMAND}[/command]\n\n"
+        f"[muted]Then restart your shell. See docs/how-to/install.md — "
         f"set {OPT_OUT_ENV}=1 to silence this check.[/muted]"
     )
