@@ -40,6 +40,11 @@ UPGRADE_COMMAND = (
     "uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley "
     "&& uv tool update-shell"
 )
+# The rendered docs page the upgrade command lives on (clickable in the notice).
+DOCS_URL = (
+    f"https://github.com/{REPO}/blob/{BRANCH}/docs/how-to/install.md"
+    "#install-a-newer-version-for-yourself-per-user"
+)
 # ---------------------------------------------------------------------------
 
 # Opt-out: set this to any non-empty value to skip the check entirely
@@ -134,9 +139,11 @@ def format_update_notice(latest: str) -> str:
     """
     return (
         f"[status.warning]A newer shelley is available:[/status.warning] "
-        f"[version]{latest}[/version] [muted](you have {__version__})[/muted]\n\n"
-        f"[header]Upgrade & restart your shell:[/header]\n"
-        f"[command]{UPGRADE_COMMAND}[/command]\n\n"
-        f"[muted]Then restart your shell. See docs/how-to/install.md — "
-        f"set {OPT_OUT_ENV}=1 to silence this check.[/muted]"
+        f"[version]{__version__}[/version] [muted]→[/muted] [version]{latest}[/version]\n\n"
+        f"[header]To upgrade:[/header]\n"
+        f"  [muted]1.[/muted] Run in your terminal:\n"
+        f"     [command]{UPGRADE_COMMAND}[/command]\n"
+        f"  [muted]2.[/muted] Restart your shell.\n\n"
+        f"[muted]More info: [link={DOCS_URL}]install guide[/link]   •   "
+        f"silence this message with [command]export {OPT_OUT_ENV}=1[/command][/muted]"
     )
