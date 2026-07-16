@@ -593,6 +593,7 @@ name = "shelley"
 source = { editable = "." }
 dependencies = [
     { name = "container-guts" },
+    { name = "packaging" },
     { name = "pyyaml" },
     { name = "questionary" },
     { name = "rich" },
@@ -614,6 +615,7 @@ requires-dist = [
     { name = "container-guts", git = "https://github.com/Sydney-Informatics-Hub/guts.git?branch=singularity" },
     { name = "flake8", marker = "extra == 'dev'" },
     { name = "mypy", marker = "extra == 'dev'" },
+    { name = "packaging", specifier = ">=21" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "pytest-timeout", marker = "extra == 'dev'" },

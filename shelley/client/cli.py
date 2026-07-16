@@ -17,7 +17,7 @@ from ..utils.commands import CORE_COMMANDS
 from ..utils.batch import batch_build_modules, read_tools_file
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_warning, print_info, print_rule,
-    print_version,
+    print_version, print_update_notice,
 )
 
 
@@ -39,6 +39,7 @@ def _print_usage() -> None:
     console.print("\n")
     console.print(ShelleyStyle.format_command_examples())
     print_rule()
+    print_update_notice()
 
 
 def main() -> None:

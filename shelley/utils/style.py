@@ -156,12 +156,14 @@ class ShelleyStyle:
                      ░░░░░░░░░░░░░░░░░░░░░░░[/#ed087c]
 """
         
+        from .. import __version__
+
         return Panel(
             Align.left(logo),
             box=ROUNDED,
             border_style="primary",
             padding=(1, 3),
-            title="[primary][bold]🐢 Shelley Tool Finder[/bold][/primary]"
+            title=f"[primary][bold]🐢 Shelley Tool Finder[/bold][/primary] [version]v{__version__}[/version]"
         )
     
     @staticmethod
@@ -397,14 +399,12 @@ class ShelleyStyle:
     @staticmethod
     def create_version_info() -> str:
         """Get version information for display."""
-        try:
-            # Try to get version from package metadata
-            import importlib.metadata
-            version = importlib.metadata.version('shelley')
-        except Exception:
-            version = "0.1.0-dev"
-        
-        return f"[header]Shelley[/header] [version]{version}[/version]"
+        # Single source of truth: shelley/__init__.py:__version__ (pyproject
+        # derives the package version from it). Reading it directly is correct
+        # whether shelley is pip-installed or run from a source checkout.
+        from .. import __version__
+
+        return f"[header]Shelley[/header] [version]{__version__}[/version]"
     
     @staticmethod
     def create_progress_bar(description: str) -> Progress:
@@ -489,8 +489,17 @@ def print_command(command: str):
     console.print(f"[command]{command}[/command]")
 
 def print_version():
-    """Print version information."""
+    """Print version information, plus an upgrade notice if main is ahead."""
     console.print(ShelleyStyle.create_version_info())
+    print_update_notice()
+
+def print_update_notice():
+    """Print a notice if a newer shelley is available on main (silent otherwise)."""
+    from .update_check import check_for_update, format_update_notice
+
+    latest = check_for_update()
+    if latest:
+        console.print(format_update_notice(latest))
 
 def print_about():
     """Print about information."""

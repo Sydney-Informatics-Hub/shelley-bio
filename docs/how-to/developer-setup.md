@@ -79,6 +79,24 @@ The version lives in **one** place — `__version__` in
 dynamically (`[tool.hatch.version]`), and `shelley --version` reports it. Never
 edit a version string anywhere else.
 
+### Update check
+
+`shelley --version`, `shelley help`, and bare `shelley` tell the user when a
+newer version is available and how to upgrade. The check
+([`shelley/utils/update_check.py`](../../shelley/utils/update_check.py)) fetches
+`__version__` from `shelley/__init__.py` on the **`main`** branch (raw GitHub),
+compares it to the running version, and — if `main` is ahead — prints the
+upgrade command. It is cached for a day (`~/.cache/shelley/update_check.json`),
+times out fast, and fails silently, so it never slows or breaks a command.
+Users can silence it with `SHELLEY_NO_UPDATE_CHECK=1`.
+
+Because the signal is the released version string, bumping `__version__` on
+`main` at release time (below) is what triggers the alert for existing installs.
+The repo/branch it reads and the upgrade command it prints are the clearly
+marked constants at the top of `update_check.py`; the upgrade command must stay
+in sync with the `### Upgrade` section of
+[`install.md`](install.md#upgrade).
+
 ### Release checklist
 
 On `dev`:
