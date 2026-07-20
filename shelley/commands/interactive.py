@@ -3,7 +3,7 @@
 from .build import build_module
 from .find import find_tool_sync
 from .search import search_tools
-from ..utils.args import parse_build_flags, parse_verbosity
+from ..utils.args import parse_build_flags, parse_verbose
 from ..utils.commands import CORE_COMMANDS
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_rule,
@@ -43,11 +43,11 @@ def interactive_mode() -> None:
         elif cmd == "help":
             console.print(help_table)
         elif cmd == "find":
-            verbosity, positional = parse_verbosity(parts[1:])
+            verbose, positional = parse_verbose(parts[1:])
             if positional:
-                find_tool_sync(positional[0], verbosity=verbosity)
+                find_tool_sync(positional[0], verbose=verbose)
             else:
-                print_warning("Usage: find <tool_name> [-v|-vv]")
+                print_warning("Usage: find <tool_name> [-v]")
         elif cmd == "search":
             if len(parts) > 1:
                 search_tools(" ".join(parts[1:]))

@@ -7,8 +7,8 @@ REPL uses it as-is.
 
 # Commands available in both the CLI and the interactive REPL.
 CORE_COMMANDS = [
-    {"command": "find <tool> [-v|-vv]",
-     "description": "Find a tool; -v lists all versions, -vv adds CVMFS paths",
+    {"command": "find <tool> [-v]",
+     "description": "Find a tool; -v adds CVMFS container paths",
      "example": "find fastqc"},
     {"command": "search <description>",
      "description": "Search for tools by function",

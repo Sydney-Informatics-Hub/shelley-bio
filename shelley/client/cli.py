@@ -12,7 +12,7 @@ from ..commands.build import build_module
 from ..commands.find import find_tool_sync
 from ..commands.interactive import interactive_mode
 from ..commands.search import search_tools
-from ..utils.args import parse_build_flags, parse_verbosity
+from ..utils.args import parse_build_flags, parse_verbose
 from ..utils.commands import CORE_COMMANDS
 from ..utils.batch import batch_build_modules, read_tools_file
 from ..utils.style import (
@@ -75,12 +75,12 @@ def main() -> None:
         sys.exit(0 if build_module(arg, interactive=interactive) else 1)
 
     if command == "find":
-        verbosity, positional = parse_verbosity(sys.argv[2:])
+        verbose, positional = parse_verbose(sys.argv[2:])
         if positional:
-            find_tool_sync(positional[0], verbosity=verbosity)
+            find_tool_sync(positional[0], verbose=verbose)
         else:
             print_warning("Missing tool name")
-            print_info("Usage: [command]shelley find <tool_name> [-v|-vv][/command]")
+            print_info("Usage: [command]shelley find <tool_name> [-v][/command]")
             print_info("Example: [command]shelley find fastqc[/command]")
         sys.exit(0)
 

@@ -1,33 +1,31 @@
-"""Tests for verbosity flag parsing and the -vv build/path helper."""
+"""Tests for verbose flag parsing and the build/path helper."""
 
-from unittest.mock import patch
-
-from shelley.utils.args import parse_build_flags, parse_verbosity
+from shelley.utils.args import parse_build_flags, parse_verbose
 from shelley.utils.cache import compute_build_entries
 
 
 # ---------------------------------------------------------------------------
-# parse_verbosity
+# parse_verbose
 # ---------------------------------------------------------------------------
 
 def test_no_flags():
-    assert parse_verbosity(["samtools"]) == (0, ["samtools"])
+    assert parse_verbose(["samtools"]) == (False, ["samtools"])
 
 
 def test_single_short_flag():
-    assert parse_verbosity(["samtools", "-v"]) == (1, ["samtools"])
+    assert parse_verbose(["samtools", "-v"]) == (True, ["samtools"])
 
 
 def test_long_flag():
-    assert parse_verbosity(["--verbose", "samtools"]) == (1, ["samtools"])
+    assert parse_verbose(["--verbose", "samtools"]) == (True, ["samtools"])
 
 
 def test_double_short_flag():
-    assert parse_verbosity(["-vv", "samtools"]) == (2, ["samtools"])
+    assert parse_verbose(["-vv", "samtools"]) == (True, ["samtools"])
 
 
 def test_stacked_short_flags():
-    assert parse_verbosity(["-v", "samtools", "-v"]) == (2, ["samtools"])
+    assert parse_verbose(["-v", "samtools", "-v"]) == (True, ["samtools"])
 
 
 # ---------------------------------------------------------------------------
@@ -51,33 +49,30 @@ def test_build_flags_interactive_before_positional():
 
 
 def test_stacked_long_flags():
-    assert parse_verbosity(["--verbose", "--verbose", "x"]) == (2, ["x"])
+    assert parse_verbose(["--verbose", "--verbose", "x"]) == (True, ["x"])
 
 
 # ---------------------------------------------------------------------------
-# compute_build_entries — one row per build, keeps paths, no dedup
+# compute_build_entries — one row per build, keeps paths and dates, no dedup,
+# sorted by version (desc) then build date (desc)
 # ---------------------------------------------------------------------------
 
 def test_build_entries_keep_every_build_and_path():
-    pairs = [
-        ("1.21--h50ea8bc_0", "/cvmfs/.../samtools:1.21--h50ea8bc_0"),
-        ("1.21--h96c455f_1", "/cvmfs/.../samtools:1.21--h96c455f_1"),
-        ("1.20--h50ea8bc_0", "/cvmfs/.../samtools:1.20--h50ea8bc_0"),
+    triples = [
+        # A newer build of the older version must still sort below every 1.21 build.
+        ("1.20--h50ea8bc_0", "/cvmfs/.../samtools:1.20--h50ea8bc_0", 1700000000.0),  # 2023-11-14
+        ("1.21--h50ea8bc_0", "/cvmfs/.../samtools:1.21--h50ea8bc_0", 1564711787.0),  # 2019-08-02
+        ("1.21--h96c455f_1", "/cvmfs/.../samtools:1.21--h96c455f_1", 1564719341.0),  # 2019-08-02 (later)
     ]
-    with patch("shelley.utils.cache.get_registry_tags", return_value=["1.21--abc"]):
-        entries = compute_build_entries("samtools", pairs)
+    entries = compute_build_entries("samtools", triples)
 
-    # No deduplication: every (tag, path) is preserved.
+    # No deduplication; ordered by version desc, then build date desc within a version.
     assert [e["tag"] for e in entries] == [
-        "1.21--h50ea8bc_0", "1.21--h96c455f_1", "1.20--h50ea8bc_0",
+        "1.21--h96c455f_1", "1.21--h50ea8bc_0", "1.20--h50ea8bc_0",
     ]
-    assert [e["path"] for e in entries] == [p for _, p in pairs]
-    # Buildable is keyed on the short tag: 1.21 is in the registry, 1.20 is not.
-    assert [e["buildable"] for e in entries] == [True, True, False]
-
-
-def test_build_entries_registry_failure_marks_unbuildable():
-    pairs = [("1.21--h50ea8bc_0", "/cvmfs/.../samtools:1.21--h50ea8bc_0")]
-    with patch("shelley.utils.cache.get_registry_tags", side_effect=RuntimeError):
-        entries = compute_build_entries("samtools", pairs)
-    assert entries[0]["buildable"] is False
+    assert [e["path"] for e in entries] == [
+        "/cvmfs/.../samtools:1.21--h96c455f_1",
+        "/cvmfs/.../samtools:1.21--h50ea8bc_0",
+        "/cvmfs/.../samtools:1.20--h50ea8bc_0",
+    ]
+    assert [e["date"] for e in entries] == ["2019-08-02", "2019-08-02", "2023-11-14"]

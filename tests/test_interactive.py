@@ -109,27 +109,27 @@ def test_help_shows_table():
 
 def test_find_dispatches():
     mocks = _run(["find samtools", "exit"])
-    mocks["find"].assert_called_once_with("samtools", verbosity=0)
+    mocks["find"].assert_called_once_with("samtools", verbose=False)
 
 
 def test_find_verbose_flag_dispatches():
     mocks = _run(["find samtools -v", "exit"])
-    mocks["find"].assert_called_once_with("samtools", verbosity=1)
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
 
 
 def test_find_verbose_long_flag_dispatches():
     mocks = _run(["find --verbose samtools", "exit"])
-    mocks["find"].assert_called_once_with("samtools", verbosity=1)
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
 
 
 def test_find_double_verbose_flag_dispatches():
     mocks = _run(["find samtools -vv", "exit"])
-    mocks["find"].assert_called_once_with("samtools", verbosity=2)
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
 
 
 def test_find_stacked_verbose_flags_dispatch():
     mocks = _run(["find samtools -v -v", "exit"])
-    mocks["find"].assert_called_once_with("samtools", verbosity=2)
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
 
 
 def test_find_missing_arg_warns():

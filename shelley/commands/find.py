@@ -19,13 +19,12 @@ from ..utils.render import paginate, print_find_hint, render_tool_table
 from ..utils.style import ShelleyStyle, console
 
 
-def find_tool_sync(tool_name: str, verbosity: int = 0) -> None:
+def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
     """Find a tool by name using RSEC + CVMFS cache (no MCP server needed).
 
-    ``verbosity`` controls the version listing:
-      0 — truncated top-5 preview (default)
-      1 (``-v``) — full paginated version list
-      2 (``-vv``) — full paginated list of every build, with CVMFS container paths
+    ``verbose`` controls the version listing:
+      False — truncated top-5 preview (default)
+      True (``-v``) — full paginated list of every build, with CVMFS container paths
     """
     clean_name = re.sub(r"[:/].*$", "", tool_name).strip()
     query_lower = clean_name.lower()
@@ -67,7 +66,7 @@ def find_tool_sync(tool_name: str, verbosity: int = 0) -> None:
             "available": True,
             "all_versions": unique_versions,
             "total_versions": len(unique_versions),
-            "builds": compute_build_entries(tool_id, pairs) if verbosity >= 2 else None,
+            "builds": compute_build_entries(tool_id, pairs) if verbose else None,
             "install_command": f"shelley build {tool_id}",
         }
 
@@ -89,10 +88,10 @@ def find_tool_sync(tool_name: str, verbosity: int = 0) -> None:
         "suggestions": suggestions,
         "tool": tool_payload,
         "containers": containers_payload,
-    }, verbosity=verbosity)
+    }, verbose=verbose)
 
 
-def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
+def _render_find_tool(payload: dict, verbose: bool = False) -> None:
     """Render a find_tool result payload."""
     query = payload.get("query", "unknown")
     query_lower = query.lower()
@@ -162,12 +161,12 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 show_lines=False,
             )
             table.add_column("Versions", style="version", no_wrap=True)
-            table.add_column("Buildable", no_wrap=True)
+            table.add_column("Date", no_wrap=True)
             table.add_column("Installed", no_wrap=True)
             for entry in entries:
                 table.add_row(
                     entry["version"],
-                    _glyph(entry["buildable"]),
+                    entry["date"],
                     _glyph(_installed(entry["version"])),
                 )
             return table
@@ -181,20 +180,20 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 show_lines=False,
             )
             table.add_column("Versions", style="version", no_wrap=True)
-            table.add_column("Buildable", no_wrap=True)
+            table.add_column("Date", no_wrap=True)
             table.add_column("Installed", no_wrap=True)
             table.add_column("Container Path", style="accent", overflow="fold")
             for entry in entries:
                 short = entry["tag"].split("--")[0]
                 table.add_row(
                     entry["tag"],
-                    _glyph(entry["buildable"]),
+                    f"[muted]{entry["date"]}[/muted]",
                     _glyph(_installed(short)),
                     entry["path"],
                 )
             return table
 
-        if verbosity >= 2:
+        if verbose:
             builds = containers["builds"]
 
             def render_page(page_items, page, total_pages, total_count):
@@ -205,15 +204,6 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                 ))
 
             paginate(builds, render_page)
-        elif verbosity == 1:
-            def render_page(page_items, page, total_pages, total_count):
-                page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
-                console.print(build_versions_table(
-                    page_items,
-                    f"[header]Available Versions ({total_count} total){page_info}[/header]",
-                ))
-
-            paginate(all_versions, render_page)
         else:
             shown_versions = all_versions[:5]
             table = build_versions_table(shown_versions, "[header]Available Versions[/header]")
@@ -224,13 +214,6 @@ def _render_find_tool(payload: dict, verbosity: int = 0) -> None:
                     f"[muted]shelley find {query_lower} -v[/muted]",
                 )
             console.print(table)
-
-        if any(not e["buildable"] for e in all_versions):
-            console.print(
-                "[muted]Buildable ✗: Versions not in the shpc registry may still be built, "
-                "but can take a few minutes longer. This is suited for users who need "
-                "a specific older version for reproducibility.[/muted]"
-            )
 
         console.print(
             "[muted]Installed ✓: This version is already available to module load on this system.[/muted]"

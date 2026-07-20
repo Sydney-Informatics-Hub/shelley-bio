@@ -3,23 +3,20 @@
 import re
 
 
-def parse_verbosity(args: list[str]) -> tuple[int, list[str]]:
-    """Split verbosity flags from positional args.
+def parse_verbose(args: list[str]) -> tuple[bool, list[str]]:
+    """Split the verbose flag from positional args.
 
-    Counts each ``-v``/``--verbose`` as one level and ``-vv`` (etc.) by its
-    number of ``v``s, so ``-v -v`` and ``-vv`` both yield level 2. Returns
-    ``(verbosity, positionals)``.
+    Any of ``-v``, ``--verbose``, or ``-vv`` (etc.) sets ``verbose = True``.
+    Returns ``(verbose, positionals)``.
     """
-    verbosity = 0
+    verbose = False
     positional: list[str] = []
     for arg in args:
-        if arg == "--verbose":
-            verbosity += 1
-        elif re.fullmatch(r"-v+", arg):
-            verbosity += len(arg) - 1
+        if arg == "--verbose" or re.fullmatch(r"-v+", arg):
+            verbose = True
         else:
             positional.append(arg)
-    return verbosity, positional
+    return verbose, positional
 
 
 def parse_build_flags(args: list[str]) -> tuple[bool, list[str]]:
