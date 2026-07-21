@@ -107,7 +107,7 @@ def test_search_tool_version_singlebuild(builder, tool_name, tool_version):
 @pytest.mark.cvmfs
 @pytest.mark.parametrize(
     "tool_name,tool_version,latest_version",
-    [('samtools', None, '1.23.1--ha83d96e_0'), ('plink2', None, '2.00a5.12--h4ac6f70_0')]
+    [('samtools', None, '1.24--h9dcdb79_0'), ('plink2', None, '2.00a5.12--h4ac6f70_0')]
 )
 def test_search_tool_version_none(builder, tool_name, tool_version, latest_version):
     # When no version is provided, build the latest version

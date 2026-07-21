@@ -166,7 +166,7 @@ def _render_find_tool(payload: dict, verbose: bool = False) -> None:
             for entry in entries:
                 table.add_row(
                     entry["version"],
-                    entry["date"],
+                    f"[muted]{entry['date']}[/muted]",
                     _glyph(_installed(entry["version"])),
                 )
             return table
@@ -187,7 +187,7 @@ def _render_find_tool(payload: dict, verbose: bool = False) -> None:
                 short = entry["tag"].split("--")[0]
                 table.add_row(
                     entry["tag"],
-                    f"[muted]{entry["date"]}[/muted]",
+                    f"[muted]{entry['date']}[/muted]",
                     _glyph(_installed(short)),
                     entry["path"],
                 )
