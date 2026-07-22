@@ -32,7 +32,6 @@ def _run(inputs: list, *, side_effect=None):
          patch(f"{_MODULE}.print_warning") as mock_warning, \
          patch(f"{_MODULE}.find_tool_sync") as mock_find, \
          patch(f"{_MODULE}.search_tools") as mock_search, \
-         patch(f"{_MODULE}.versions_sync") as mock_versions, \
          patch(f"{_MODULE}.build_module") as mock_build:
 
         mock_console.input = input_mock
@@ -43,7 +42,6 @@ def _run(inputs: list, *, side_effect=None):
             "console": mock_console,
             "find": mock_find,
             "search": mock_search,
-            "versions": mock_versions,
             "build": mock_build,
             "warning": mock_warning,
             "success": mock_success,
@@ -91,7 +89,6 @@ def test_empty_input_skipped():
     mocks = _run(["", "exit"])
     mocks["find"].assert_not_called()
     mocks["search"].assert_not_called()
-    mocks["versions"].assert_not_called()
     mocks["build"].assert_not_called()
     mocks["warning"].assert_not_called()
 
@@ -112,7 +109,27 @@ def test_help_shows_table():
 
 def test_find_dispatches():
     mocks = _run(["find samtools", "exit"])
-    mocks["find"].assert_called_once_with("samtools")
+    mocks["find"].assert_called_once_with("samtools", verbose=False)
+
+
+def test_find_verbose_flag_dispatches():
+    mocks = _run(["find samtools -v", "exit"])
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
+
+
+def test_find_verbose_long_flag_dispatches():
+    mocks = _run(["find --verbose samtools", "exit"])
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
+
+
+def test_find_double_verbose_flag_dispatches():
+    mocks = _run(["find samtools -vv", "exit"])
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
+
+
+def test_find_stacked_verbose_flags_dispatch():
+    mocks = _run(["find samtools -v -v", "exit"])
+    mocks["find"].assert_called_once_with("samtools", verbose=True)
 
 
 def test_find_missing_arg_warns():
@@ -142,27 +159,17 @@ def test_search_missing_arg_warns():
 
 
 # ---------------------------------------------------------------------------
-# versions
-# ---------------------------------------------------------------------------
-
-def test_versions_dispatches():
-    mocks = _run(["versions samtools", "exit"])
-    mocks["versions"].assert_called_once_with("samtools")
-
-
-def test_versions_missing_arg_warns():
-    mocks = _run(["versions", "exit"])
-    mocks["versions"].assert_not_called()
-    mocks["warning"].assert_called()
-
-
-# ---------------------------------------------------------------------------
 # build
 # ---------------------------------------------------------------------------
 
 def test_build_dispatches():
     mocks = _run(["build samtools", "exit"])
-    mocks["build"].assert_called_once_with("samtools")
+    mocks["build"].assert_called_once_with("samtools", interactive=False)
+
+
+def test_build_interactive_flag():
+    mocks = _run(["build samtools -i", "exit"])
+    mocks["build"].assert_called_once_with("samtools", interactive=True)
 
 
 def test_build_missing_arg_warns():

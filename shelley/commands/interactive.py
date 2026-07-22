@@ -3,19 +3,16 @@
 from .build import build_module
 from .find import find_tool_sync
 from .search import search_tools
-from .versions import versions_sync
+from ..utils.args import parse_build_flags, parse_verbose
+from ..utils.commands import CORE_COMMANDS
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_rule,
     print_warning, print_info, print_success,
 )
 
-_COMMANDS = [
-    {"command": "find <tool>",          "description": "Find information about a tool",     "example": "find fastqc"},
-    {"command": "search <terms>",       "description": "Search for tools by description",   "example": "search quality control"},
-    {"command": "versions <tool>",      "description": "List available container versions", "example": "versions samtools"},
-    {"command": r"build <tool\[/ver]>", "description": "Build an Lmod module for a tool",   "example": "build samtools/1.21"},
-    {"command": "help",                 "description": "Show this help table",              "example": "help"},
-    {"command": "exit",                 "description": "Exit interactive mode",             "example": "exit"},
+_COMMANDS = CORE_COMMANDS + [
+    {"command": "help", "description": "Show this help table",  "example": "help"},
+    {"command": "exit", "description": "Exit interactive mode", "example": "exit"},
 ]
 
 
@@ -46,24 +43,21 @@ def interactive_mode() -> None:
         elif cmd == "help":
             console.print(help_table)
         elif cmd == "find":
-            if len(parts) > 1:
-                find_tool_sync(parts[1])
+            verbose, positional = parse_verbose(parts[1:])
+            if positional:
+                find_tool_sync(positional[0], verbose=verbose)
             else:
-                print_warning("Usage: find <tool_name>")
+                print_warning("Usage: find <tool_name> [-v]")
         elif cmd == "search":
             if len(parts) > 1:
                 search_tools(" ".join(parts[1:]))
             else:
                 print_warning("Usage: search <description>")
-        elif cmd == "versions":
-            if len(parts) > 1:
-                versions_sync(parts[1])
-            else:
-                print_warning("Usage: versions <tool_name>")
         elif cmd == "build":
-            if len(parts) > 1:
-                build_module(parts[1])
+            interactive, positional = parse_build_flags(parts[1:])
+            if positional:
+                build_module(positional[0], interactive=interactive)
             else:
-                print_warning("Usage: build <tool_name>[/version]")
+                print_warning("Usage: build <tool_name>[/version] [-i|--interactive]")
         else:
             print_warning(f"Unknown command: '{cmd}'. Type help for usage.")

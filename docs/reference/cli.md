@@ -11,16 +11,20 @@ shelley <command> [args]
 ## `find`
 
 ```bash
-shelley find <tool_name>
+shelley find <tool_name> [-v | -vv]
 ```
 
-| Argument | Type | Required |
-|---|---|---|
-| `tool_name` | string | Yes |
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `tool_name` | string | Yes | Tool to look up |
+| `-v`, `--verbose` | flag | No | Show every available container version, paginated, instead of the recent-versions preview |
+| `-vv` | flag | No | As `-v`, but list every individual build (one row per `--hash`) with its full CVMFS container path |
+
+Verbosity stacks: `-vv` is equivalent to `-v -v`.
 
 Looks up a tool by name. Case-insensitive; handles hyphen/underscore variants. Matches against the `id` and `name` fields in the RSEC corpus; falls back to fuzzy matching when no exact match is found.
 
-**Returns:** Tool description, homepage, and EDAM operations; a table of recent container versions with buildable status and install state; an install prompt.
+**Returns:** Tool description, homepage, and EDAM operations; a table of container versions with buildable and install status; an install prompt. By default only the five most recent versions are shown. `-v` expands this to the full paginated version list, sorted newest-first (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback). `-vv` further expands each version into its individual builds and adds a **Container Path** column with the full CVMFS image path.
 
 ---
 
@@ -39,22 +43,6 @@ Keyword search across tool metadata. Matches on name, description, EDAM operatio
 **Returns:** List of matching tools with descriptions and latest container versions.
 
 > Relevance ranking is under development.
-
----
-
-## `versions`
-
-```bash
-shelley versions <tool_name>
-```
-
-| Argument | Type | Required |
-|---|---|---|
-| `tool_name` | string | Yes |
-
-Lists every available container version for a tool, sorted newest-first.
-
-**Returns:** Version tag and buildable status (✓ = in the upstream shpc-registry, ✗ = requires local registry fallback) for each entry; an install prompt.
 
 ---
 
@@ -87,9 +75,8 @@ shelley interactive
 Starts a REPL session. Available commands inside the REPL:
 
 ```
-find <tool_name>
+find <tool_name> [-v|-vv]
 search <description>
-versions <tool_name>
 build <tool_spec>
 help
 quit / exit

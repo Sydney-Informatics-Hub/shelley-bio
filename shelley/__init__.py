@@ -5,7 +5,12 @@ This package provides tools for finding, querying, and building modules for
 bioinformatics software from CVMFS repositories.
 """
 
-__version__ = "0.1.0"
+# Single source of truth for shelley's version. pyproject.toml derives the
+# package version from this via [tool.hatch.version], and the runtime update
+# check (shelley/utils/update_check.py) compares it against this same value on
+# the main branch. To release: bump here, update CHANGELOG.md, and tag vX.Y.Z.
+# See docs/how-to/developer-setup.md ("Versioning & update check").
+__version__ = "0.2.0"
 
 from .client.cli import main as cli_main
 from .builder.cvmfs_builder import CVMFSModuleBuilder

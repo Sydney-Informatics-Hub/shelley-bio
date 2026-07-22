@@ -9,14 +9,23 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ..search.rsec import RsecSource
-from ..utils.cache import compute_version_entries, load_versions_from_cache
+from ..utils.cache import (
+    compute_build_entries,
+    compute_version_entries,
+    load_versions_from_cache,
+)
 from ..utils.globals import LMOD_MODULES_PATH
-from ..utils.render import print_find_hint, render_tool_table
+from ..utils.render import paginate, print_find_hint, render_tool_table
 from ..utils.style import ShelleyStyle, console
 
 
-def find_tool_sync(tool_name: str) -> None:
-    """Find a tool by name using RSEC + CVMFS cache (no MCP server needed)."""
+def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
+    """Find a tool by name using RSEC + CVMFS cache (no MCP server needed).
+
+    ``verbose`` controls the version listing:
+      False — truncated top-5 preview (default)
+      True (``-v``) — full paginated list of every build, with CVMFS container paths
+    """
     clean_name = re.sub(r"[:/].*$", "", tool_name).strip()
     query_lower = clean_name.lower()
 
@@ -55,8 +64,9 @@ def find_tool_sync(tool_name: str) -> None:
         unique_versions = compute_version_entries(tool_id, pairs)
         containers_payload = {
             "available": True,
-            "recent_versions": unique_versions[:5],
+            "all_versions": unique_versions,
             "total_versions": len(unique_versions),
+            "builds": compute_build_entries(tool_id, pairs) if verbose else None,
             "install_command": f"shelley build {tool_id}",
         }
 
@@ -78,12 +88,13 @@ def find_tool_sync(tool_name: str) -> None:
         "suggestions": suggestions,
         "tool": tool_payload,
         "containers": containers_payload,
-    })
+    }, verbose=verbose)
 
 
-def _render_find_tool(payload: dict) -> None:
+def _render_find_tool(payload: dict, verbose: bool = False) -> None:
     """Render a find_tool result payload."""
     query = payload.get("query", "unknown")
+    query_lower = query.lower()
 
     if not payload.get("found"):
         suggestions = payload.get("suggestions", [])
@@ -132,47 +143,94 @@ def _render_find_tool(payload: dict) -> None:
     if containers and containers.get("available"):
         lmod_path = Path(LMOD_MODULES_PATH)
         tool_id = tool.get("id", query) if tool else query
-
-        table = Table(
-            title="[header]Available Versions[/header]",
-            box=ROUNDED,
-            border_style="primary",
-            header_style="table.header",
-            show_lines=False,
-        )
-        table.add_column("Version", style="version", no_wrap=True)
-        table.add_column("Buildable", no_wrap=True)
-        table.add_column("Status", no_wrap=True)
-
-        for entry in containers["recent_versions"]:
-            version = entry["version"]
-            buildable = entry["buildable"]
-            installed = any((lmod_path / tool_id).glob(f"{version}*.lua"))
-            buildable_str = "[success]✓[/success]" if buildable else "[muted]✗[/muted]"
-            status = "[success]✓ installed[/success]" if installed else "[muted]not installed[/muted]"
-            table.add_row(version, buildable_str, status)
-
+        all_versions = containers["all_versions"]
         total = containers["total_versions"]
-        shown = len(containers["recent_versions"])
-        if total > shown:
-            table.add_row(
-                f"[muted]+ {total - shown} more[/muted]",
-                "",
-                f"[muted]shelley versions {query}[/muted]",
+
+        def _installed(version: str) -> bool:
+            return any((lmod_path / tool_id).glob(f"{version}*.lua"))
+
+        def _glyph(flag: bool) -> str:
+            return "[success]✓[/success]" if flag else "[muted]✗[/muted]"
+
+        def build_versions_table(entries: list[dict], title: str) -> Table:
+            table = Table(
+                title=title,
+                box=ROUNDED,
+                border_style="primary",
+                header_style="table.header",
+                show_lines=False,
             )
+            table.add_column("Versions", style="version", no_wrap=True)
+            table.add_column("Date", no_wrap=True)
+            table.add_column("Installed", no_wrap=True)
+            for entry in entries:
+                table.add_row(
+                    entry["version"],
+                    f"[muted]{entry['date']}[/muted]",
+                    _glyph(_installed(entry["version"])),
+                )
+            return table
 
-        console.print(table)
-
-        if any(not e["buildable"] for e in containers["recent_versions"]):
-            console.print(
-                "[muted]Buildable ✗: Versions not in the shpc registry may still be built, "
-                "but can take a few minutes longer. This is suited for users who need "
-                "a specific older version for reproducibility.[/muted]"
+        def build_paths_table(entries: list[dict], title: str) -> Table:
+            table = Table(
+                title=title,
+                box=ROUNDED,
+                border_style="primary",
+                header_style="table.header",
+                show_lines=False,
             )
+            table.add_column("Versions", style="version", no_wrap=True)
+            table.add_column("Date", no_wrap=True)
+            table.add_column("Installed", no_wrap=True)
+            table.add_column("Container Path", style="accent", overflow="fold")
+            for entry in entries:
+                short = entry["tag"].split("--")[0]
+                table.add_row(
+                    entry["tag"],
+                    f"[muted]{entry['date']}[/muted]",
+                    _glyph(_installed(short)),
+                    entry["path"],
+                )
+            return table
 
-        console.print(Panel(
+        if verbose:
+            builds = containers["builds"]
+
+            def render_page(page_items, page, total_pages, total_count):
+                page_info = f" — page {page + 1} of {total_pages}" if total_pages > 1 else ""
+                console.print(build_paths_table(
+                    page_items,
+                    f"[header]Available Builds ({total_count} total){page_info}[/header]",
+                ))
+
+            paginate(builds, render_page)
+        else:
+            shown_versions = all_versions[:5]
+            table = build_versions_table(shown_versions, "[header]Available Versions[/header]")
+            if total > len(shown_versions):
+                table.add_row(
+                    f"[muted]+ {total - len(shown_versions)} more[/muted]",
+                    "",
+                    f"[muted]shelley find {query_lower} -v[/muted]",
+                )
+            console.print(table)
+
+        console.print(
+            "[muted]Installed ✓: This version is already available to module load on this system.[/muted]"
+        )
+
+        latest_version = all_versions[0]["version"] if all_versions else ""
+        install_text = (
             f"To install the latest version of {title_name}, run:\n\n"
-            f"[command]shelley build {query}[/command]",
+            f"[command]shelley build {query_lower}[/command]"
+        )
+        if latest_version:
+            install_text += (
+                f"\n\nTo install a specific version of {title_name}, run:\n\n"
+                f"[command]shelley build {query_lower}/{latest_version}[/command]"
+            )
+        console.print(Panel(
+            install_text,
             title="[header]Install[/header]",
             box=ROUNDED,
             border_style="info",

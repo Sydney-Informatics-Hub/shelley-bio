@@ -19,7 +19,7 @@ shelley build samtools/1.19
 shelley build star/2.7.11a
 ```
 
-Version strings follow the Bioconda convention — see `shelley versions <tool>` for exact tags available on CVMFS.
+Version strings follow the Bioconda convention — see `shelley find <tool> -v` for exact tags available on CVMFS.
 
 ### What happens when a tool is absent from the upstream shpc-registry
 

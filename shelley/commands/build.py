@@ -7,13 +7,28 @@ import subprocess
 from pathlib import Path
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
+from ..utils.modules import load_build_modules
 from ..utils.style import (
     console, ShelleyStyle, print_info, print_warning, print_error, print_rule,
 )
 
 
-def build_module(tool_spec: str) -> bool:
+def resolve_shelley_executable() -> str | None:
+    """Locate the installed `shelley` launcher on PATH.
+
+    Used to re-invoke ourselves under sudo. We rely on PATH rather than deriving
+    a path from __file__, because the launcher and the package live in unrelated
+    directories under a `uv tool install` layout (the launcher is in
+    .../uv/tools/shelley/bin/, the package in .../site-packages/shelley/).
+    """
+    return shutil.which("shelley")
+
+
+def build_module(tool_spec: str, interactive: bool = False) -> bool:
     """Build an Lmod module for a tool from CVMFS.
+
+    ``interactive`` opens a session to curate the aliases the module exposes —
+    deselect, rename, and add — for both upstream and local builds.
 
     Returns True if the build succeeded, False otherwise.
     """
@@ -22,7 +37,7 @@ def build_module(tool_spec: str) -> bool:
 
     if needs_sudo:
         # Re-invoke with sudo, preserving the PATH so the shelley script is found.
-        shelley_path = shutil.which("shelley")
+        shelley_path = resolve_shelley_executable()
         if shelley_path is None:
             print_error("Could not locate the 'shelley' executable on PATH")
             return False
@@ -31,6 +46,8 @@ def build_module(tool_spec: str) -> bool:
             "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
             shelley_path, "build", tool_spec,
         ]
+        if interactive:
+            cmd.append("--interactive")
 
         try:
             print_info(f"Running with elevated privileges: build {tool_spec}")
@@ -46,6 +63,12 @@ def build_module(tool_spec: str) -> bool:
             print_warning("Build cancelled by user")
             return False
 
+    # Load shpc + singularity here (not in CVMFSModuleBuilder.__init__) so it only
+    # happens on the build path. This runs in whichever process actually performs the
+    # install — including the elevated child after the sudo re-exec above — rather than
+    # relying on `sudo -E` preserving the Lmod environment.
+    load_build_modules()
+
     builder = CVMFSModuleBuilder()
 
     try:
@@ -59,7 +82,9 @@ def build_module(tool_spec: str) -> bool:
         final_tool, final_version = builder.search_tool_version(tool_name, requested_version)
 
         with ShelleyStyle.create_status(f"Building module for {tool_spec}") as status:
-            module_file = builder.shpc_install(final_tool, final_version)
+            module_file = builder.shpc_install(
+                final_tool, final_version, interactive=interactive, status=status,
+            )
             available_versions = builder.list_versions(tool_name)
 
         if requested_version is None and len(available_versions) > 1:

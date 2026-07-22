@@ -107,7 +107,7 @@ def test_search_tool_version_singlebuild(builder, tool_name, tool_version):
 @pytest.mark.cvmfs
 @pytest.mark.parametrize(
     "tool_name,tool_version,latest_version",
-    [('samtools', None, '1.23.1--ha83d96e_0'), ('plink2', None, '2.00a5.12--h4ac6f70_0')]
+    [('samtools', None, '1.24--h9dcdb79_0'), ('plink2', None, '2.00a5.12--h4ac6f70_0')]
 )
 def test_search_tool_version_none(builder, tool_name, tool_version, latest_version):
     # When no version is provided, build the latest version
@@ -148,8 +148,9 @@ def test_shpc_install_success(builder, tmp_path):
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags",
-               return_value={version}), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}), \
          patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
 
@@ -194,7 +195,9 @@ def test_shpc_install_retries_after_uninstall(builder, tmp_path):
         return m
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value={version}):
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}):
         dest = builder.shpc_install(tool, version)
 
     assert install_calls["n"] == 2
@@ -210,9 +213,50 @@ def test_shpc_install_hard_failure_raises(builder, tmp_path):
     with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base, install_rc=1,
                                                 install_out="Unexpected shpc error")), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value={version}):
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {"samtools": "/usr/local/bin/samtools"}}):
         with pytest.raises(RuntimeError, match="shpc install failed"):
             builder.shpc_install("samtools", version)
+
+
+def test_shpc_install_warns_when_no_aliases(builder, tmp_path):
+    """Empty aliases + no -i/--interactive → a warning panel suggests rebuilding."""
+    tool, version = "bandage", "0.8.1--hc9558a2_0"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"}, "aliases": {}}), \
+         patch("shelley.builder.cvmfs_builder.ShelleyStyle.create_warning_panel") as mock_warn:
+        builder.shpc_install(tool, version)
+
+    titles = [c.args[0] for c in mock_warn.call_args_list if c.args]
+    assert "No aliases" in titles
+
+
+def test_shpc_install_no_warning_when_aliases_present(builder, tmp_path):
+    """Non-empty aliases → no 'No aliases' warning."""
+    tool, version = "samtools", "1.21--h96c455f_1"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}), \
+         patch("shelley.builder.cvmfs_builder.ShelleyStyle.create_warning_panel") as mock_warn:
+        builder.shpc_install(tool, version)
+
+    titles = [c.args[0] for c in mock_warn.call_args_list if c.args]
+    assert "No aliases" not in titles
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +296,8 @@ def test_build_no_version(mock_builder_cls):
     result = build_module("samtools")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.23.1--ha83d96e_0")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.23.1--ha83d96e_0", interactive=False, status=None)
 
 
 def test_build_short_version(mock_builder_cls):
@@ -260,7 +305,8 @@ def test_build_short_version(mock_builder_cls):
     result = build_module("samtools/1.21")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.21--h96c455f_1")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.21--h96c455f_1", interactive=False, status=None)
 
 
 def test_build_full_tag(mock_builder_cls):
@@ -268,7 +314,8 @@ def test_build_full_tag(mock_builder_cls):
     result = build_module("samtools/1.21--h96c455f_1")
 
     assert result is True
-    mock_builder_cls.shpc_install.assert_called_once_with("samtools", "1.21--h96c455f_1")
+    mock_builder_cls.shpc_install.assert_called_once_with(
+        "samtools", "1.21--h96c455f_1", interactive=False, status=None)
 
 
 # ---------------------------------------------------------------------------
@@ -343,8 +390,9 @@ def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run",
                side_effect=_make_subprocess_run(shpc_base)), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags",
-               return_value={version}), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}), \
          patch.object(builder, "_ensure_local_registry_entry") as mock_ensure:
         dest = builder.shpc_install(tool, version)
 
@@ -352,6 +400,35 @@ def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
     assert dest == builder.lmod_modules_path / tool / f"{version}.lua"
     assert dest.is_symlink()
     assert dest.resolve() == src.resolve()
+
+
+def test_shpc_install_upstream_with_edit_reroutes_to_local(builder, tmp_path):
+    """Editing an UPSTREAM tool must still create a local entry (the reroute).
+
+    Regression guard: `--interactive` on a remote-registry version has to build
+    through a local shpc registry entry so the edits persist and shadow upstream.
+    """
+    tool, version = "bcftools", "1.16--haef29d1_2"
+    shpc_base = tmp_path / "shpc_modules"
+    src = shpc_base / "quay.io" / "biocontainers" / tool / version / "module.lua"
+    src.parent.mkdir(parents=True)
+    src.touch()
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run",
+               side_effect=_make_subprocess_run(shpc_base)), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config",
+               return_value={"tags": {version: "sha256:x"},
+                             "aliases": {tool: f"/usr/local/bin/{tool}"}}), \
+         patch.object(builder, "_register_local_registry") as mock_register, \
+         patch.object(builder, "_ensure_local_registry_entry",
+                      return_value=[{"name": tool, "command": tool}]) as mock_ensure:
+        builder.shpc_install(tool, version, interactive=True)
+
+    # in_upstream is True, but interactive forces the local-registry route.
+    mock_ensure.assert_called_once()
+    assert mock_ensure.call_args.kwargs.get("in_upstream") is True
+    assert mock_ensure.call_args.kwargs.get("interactive") is True
+    mock_register.assert_called_once()
 
 
 def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
@@ -388,13 +465,15 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
 
     # Wrap _ensure_local_registry_entry to redirect writes to tmp_path
     real_ensure = builder._ensure_local_registry_entry
-    def wrapped_ensure(tool_name, ver, container_path, uri, **_):
-        real_ensure(tool_name, ver, container_path, uri, local_registry=str(local_registry))
+    def wrapped_ensure(tool_name, ver, container_path, uri, **kwargs):
+        kwargs.pop("local_registry", None)
+        return real_ensure(tool_name, ver, container_path, uri,
+                           local_registry=str(local_registry), **kwargs)
 
     expected_cvmfs = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config", return_value={}), \
          patch.object(builder, "_ensure_local_registry_entry", side_effect=wrapped_ensure), \
          patch("shelley.builder.cvmfs_builder.extract_aliases",
                return_value=fake_aliases) as mock_extract, \
@@ -441,13 +520,107 @@ def test_shpc_install_creates_local_entry_when_not_in_upstream(builder, tmp_path
         call_order.append("ensure")
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=fake_run), \
-         patch("shelley.builder.cvmfs_builder.get_registry_tags", return_value=set()), \
+         patch("shelley.builder.cvmfs_builder._load_registry_config", return_value={}), \
          patch.object(builder, "_ensure_local_registry_entry", side_effect=fake_ensure), \
          patch.object(builder, "_register_local_registry"):
         dest = builder.shpc_install(tool, version)
 
     assert call_order == ["uninstall", "ensure", "install"]
     assert dest.is_symlink()
+
+
+def _read_aliases(local_registry, tool):
+    import yaml
+    return yaml.safe_load(
+        (local_registry / "quay.io" / "biocontainers" / tool / "container.yaml").read_text()
+    )["aliases"]
+
+
+def test_ensure_local_registry_entry_interactive_narrows(builder, tmp_path):
+    """interactive=True → edit_aliases_interactive result is what gets written."""
+    tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
+    local_registry = tmp_path / "registry"
+    container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    detected = [
+        {"name": "vcftools", "command": "vcftools"},
+        {"name": "devmem", "command": "devmem"},
+        {"name": "telnet", "command": "telnet"},
+    ]
+    edited = [detected[0]]
+
+    with patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=detected), \
+         patch("shelley.builder.cvmfs_builder.edit_aliases_interactive",
+               return_value=edited) as mock_edit, \
+         patch("shelley.builder.cvmfs_builder.subprocess.run",
+               return_value=MagicMock(returncode=1, stdout="", stderr="")), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        written = builder._ensure_local_registry_entry(
+            tool, version, container_path, f"quay.io/biocontainers/{tool}",
+            local_registry=str(local_registry), interactive=True,
+        )
+
+    mock_edit.assert_called_once_with(detected)
+    assert written == edited
+    assert _read_aliases(local_registry, tool) == edited
+
+
+def test_ensure_local_registry_entry_no_edit_keeps_all(builder, tmp_path):
+    """interactive=False (default) → no prompt; all detected aliases are written."""
+    tool, version = "vcftools", "0.1.16--pl5321hdcf5f25_9"
+    local_registry = tmp_path / "registry"
+    container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    detected = [
+        {"name": "vcftools", "command": "vcftools"},
+        {"name": "telnet", "command": "telnet"},
+    ]
+
+    with patch("shelley.builder.cvmfs_builder.extract_aliases", return_value=detected), \
+         patch("shelley.builder.cvmfs_builder.edit_aliases_interactive") as mock_edit, \
+         patch("shelley.builder.cvmfs_builder.subprocess.run",
+               return_value=MagicMock(returncode=1, stdout="", stderr="")), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        builder._ensure_local_registry_entry(
+            tool, version, container_path, f"quay.io/biocontainers/{tool}",
+            local_registry=str(local_registry),
+        )
+
+    mock_edit.assert_not_called()
+    assert _read_aliases(local_registry, tool) == detected
+
+
+def test_ensure_local_registry_entry_upstream_edits_upstream_aliases(builder, tmp_path):
+    """in_upstream=True → aliases seeded from the (downloaded) upstream config, not guts."""
+    tool, version = "star", "2.7.11a--h0033a41_0"
+    local_registry = tmp_path / "registry"
+    container_path = str(builder.cvmfs_singularity_path / f"{tool}:{version}")
+
+    upstream = {"docker": f"quay.io/biocontainers/{tool}", "tags": {},
+                "aliases": {"STAR": "/usr/local/bin/STAR"}}
+    # rename is name-only: command (the full upstream path) is preserved
+    renamed = [{"name": "star", "command": "/usr/local/bin/STAR"}]
+
+    def fake_edit(aliases):
+        # editor receives the normalized upstream aliases (command path preserved)
+        assert aliases == [{"name": "STAR", "command": "/usr/local/bin/STAR"}]
+        return renamed
+
+    with patch("shelley.builder.cvmfs_builder.extract_aliases") as mock_extract, \
+         patch("shelley.builder.cvmfs_builder._load_registry_config", return_value=upstream), \
+         patch("shelley.builder.cvmfs_builder.edit_aliases_interactive",
+               side_effect=fake_edit), \
+         patch("shelley.builder.cvmfs_builder.subprocess.run",
+               return_value=MagicMock(returncode=1, stdout="", stderr="")), \
+         patch.object(builder, "_compute_sha256", return_value="deadbeef"):
+        written = builder._ensure_local_registry_entry(
+            tool, version, container_path, f"quay.io/biocontainers/{tool}",
+            local_registry=str(local_registry), interactive=True, in_upstream=True,
+        )
+
+    mock_extract.assert_not_called()
+    assert written == renamed
+    assert _read_aliases(local_registry, tool) == renamed
 
 
 # ---------------------------------------------------------------------------

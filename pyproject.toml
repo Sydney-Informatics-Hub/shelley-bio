@@ -29,6 +29,7 @@ dependencies = [
     "pyyaml>=6.0",
     "questionary>=2.0",
     "rich>=13.0",
+    "packaging>=21",
     "container-guts",
 ]
 
@@ -45,6 +46,7 @@ dev = [
 [project.scripts]
 shelley = "shelley.client.cli:main"
 shelley-build-rsec = "shelley.scripts.build_rsec_meta:main"
+shelley-build-galaxy = "shelley.scripts.build_galaxy_cache:main"
 
 [project.urls]
 Homepage = "https://github.com/Sydney-Informatics-Hub/shelley"

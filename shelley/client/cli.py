@@ -12,11 +12,12 @@ from ..commands.build import build_module
 from ..commands.find import find_tool_sync
 from ..commands.interactive import interactive_mode
 from ..commands.search import search_tools
-from ..commands.versions import versions_sync
+from ..utils.args import parse_build_flags, parse_verbose
+from ..utils.commands import CORE_COMMANDS
 from ..utils.batch import batch_build_modules, read_tools_file
 from ..utils.style import (
     console, ShelleyStyle, print_banner, print_warning, print_info, print_rule,
-    print_version,
+    print_version, print_update_notice,
 )
 
 
@@ -27,11 +28,10 @@ def _print_usage() -> None:
     print_rule("Command Usage", "secondary")
 
     usage_commands = [
-        {"command": "find <tool_name>", "description": "Find information about a specific tool", "example": "shelley find fastqc"},
-        {"command": "search <description>", "description": "Search for tools by function", "example": "shelley search 'quality control'"},
-        {"command": "versions <tool_name>", "description": "Get available container versions", "example": "shelley versions samtools"},
-        {"command": r"build <tool\[/version\]>", "description": "Build Lmod module for tool", "example": "shelley build samtools/1.21"},
+        {**c, "example": f"shelley {c['example']}"} for c in CORE_COMMANDS
+    ] + [
         {"command": "interactive", "description": "Start interactive mode", "example": "shelley interactive"},
+        {"command": "update", "description": "Upgrade shelley to the latest version", "example": "shelley update"},
         {"command": "help", "description": "Show this help message", "example": "shelley help"},
     ]
 
@@ -40,6 +40,7 @@ def _print_usage() -> None:
     console.print("\n")
     console.print(ShelleyStyle.format_command_examples())
     print_rule()
+    print_update_notice()
 
 
 def main() -> None:
@@ -59,7 +60,12 @@ def main() -> None:
         sys.exit(0)
 
     if command == "build" and len(sys.argv) > 2:
-        arg = sys.argv[2]
+        interactive, positional = parse_build_flags(sys.argv[2:])
+        if not positional:
+            print_warning("Missing tool name or tools file")
+            print_info("Usage: [command]shelley build <tool\\[/version]> [-i|--interactive][/command]")
+            sys.exit(1)
+        arg = positional[0]
         p = Path(arg)
         if p.is_file():
             tools = read_tools_file(p)
@@ -67,14 +73,15 @@ def main() -> None:
                 print_warning(f"No tool specs found in '{arg}' (file is empty or all comments)")
                 sys.exit(1)
             sys.exit(batch_build_modules(tools))
-        sys.exit(0 if build_module(arg) else 1)
+        sys.exit(0 if build_module(arg, interactive=interactive) else 1)
 
     if command == "find":
-        if len(sys.argv) > 2:
-            find_tool_sync(sys.argv[2])
+        verbose, positional = parse_verbose(sys.argv[2:])
+        if positional:
+            find_tool_sync(positional[0], verbose=verbose)
         else:
             print_warning("Missing tool name")
-            print_info("Usage: [command]shelley find <tool_name>[/command]")
+            print_info("Usage: [command]shelley find <tool_name> [-v][/command]")
             print_info("Example: [command]shelley find fastqc[/command]")
         sys.exit(0)
 
@@ -87,18 +94,13 @@ def main() -> None:
             print_info("Example: [command]shelley search 'quality control'[/command]")
         sys.exit(0)
 
-    if command == "versions":
-        if len(sys.argv) > 2:
-            versions_sync(sys.argv[2])
-        else:
-            print_warning("Missing tool name")
-            print_info("Usage: [command]shelley versions <tool_name>[/command]")
-            print_info("Example: [command]shelley versions samtools[/command]")
-        sys.exit(0)
-
     if command == "interactive":
         interactive_mode()
         sys.exit(0)
+
+    if command == "update":
+        from ..commands.update import update_shelley
+        sys.exit(update_shelley())
 
     console.print(ShelleyStyle.create_error_panel(
         "Unknown Command",

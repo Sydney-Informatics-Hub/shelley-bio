@@ -100,9 +100,22 @@ sudo env UV_TOOL_DIR=/opt/uv/tools UV_TOOL_BIN_DIR=/usr/local/bin \
 
 ### Upgrade
 
+The simplest way to upgrade is to run:
+
+```bash
+shelley update
+```
+
+This detects whether shelley is installed system-wide or per-user and runs the
+correct `uv tool upgrade` for you (invoking `sudo` for a system-wide install).
+The equivalent manual command for a system-wide BioShell install is:
+
 ```bash
 sudo env UV_TOOL_DIR=/opt/uv/tools UV_TOOL_BIN_DIR=/usr/local/bin /opt/uv/uv tool upgrade shelley
 ```
+
+> **Developer note:** `shelley update` will only work if shelley has been installed via `uv`.
+> This will fail if you are working on e.g. a local branch and running `uv run shelley`. 
 
 ### Uninstall
 
@@ -123,6 +136,9 @@ uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley@dev
 
 `@dev` pulls the latest development branch; once releases exist you can pin a tag
 (e.g. `@v0.1.0`). This install is persistent and full-featured, including `build`.
+
+Once installed, upgrade it later with `shelley update` (no `sudo` needed for a
+per-user install).
 
 If `shelley` is not found afterwards, add `~/.local/bin` to your PATH:
 
@@ -153,8 +169,8 @@ install:
 uvx --from git+https://github.com/Sydney-Informatics-Hub/shelley shelley find fastqc
 ```
 
-> **Experimental — read-only commands only.** This path supports `find`,
-> `versions`, and `search`. It does **not** support `build`, which needs the
+> **Experimental — read-only commands only.** This path supports `find`
+> (including `find -v`) and `search`. It does **not** support `build`, which needs the
 > system `shpc`/Singularity layout that only a full VM install provides.
 
 ## Python version
