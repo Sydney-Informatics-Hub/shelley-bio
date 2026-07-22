@@ -31,6 +31,7 @@ def _print_usage() -> None:
         {**c, "example": f"shelley {c['example']}"} for c in CORE_COMMANDS
     ] + [
         {"command": "interactive", "description": "Start interactive mode", "example": "shelley interactive"},
+        {"command": "update", "description": "Upgrade shelley to the latest version", "example": "shelley update"},
         {"command": "help", "description": "Show this help message", "example": "shelley help"},
     ]
 
@@ -96,6 +97,10 @@ def main() -> None:
     if command == "interactive":
         interactive_mode()
         sys.exit(0)
+
+    if command == "update":
+        from ..commands.update import update_shelley
+        sys.exit(update_shelley())
 
     console.print(ShelleyStyle.create_error_panel(
         "Unknown Command",

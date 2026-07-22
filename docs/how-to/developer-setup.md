@@ -85,17 +85,23 @@ edit a version string anywhere else.
 newer version is available and how to upgrade. The check
 ([`shelley/utils/update_check.py`](../../shelley/utils/update_check.py)) fetches
 `__version__` from `shelley/__init__.py` on the **`main`** branch (raw GitHub),
-compares it to the running version, and — if `main` is ahead — prints the
-upgrade command. It is cached for a day (`~/.cache/shelley/update_check.json`),
+compares it to the running version. If `main` is ahead, prompt to the user to
+run `shelley update`. 
+
+The update check is cached for a day (`~/.cache/shelley/update_check.json`),
 times out fast, and fails silently, so it never slows or breaks a command.
-Users can silence it with `SHELLEY_NO_UPDATE_CHECK=1`.
+Users can silence it by running `export SHELLEY_NO_UPDATE_CHECK=1` in the shell.
 
 Because the signal is the released version string, bumping `__version__` on
 `main` at release time (below) is what triggers the alert for existing installs.
-The repo/branch it reads and the upgrade command it prints are the clearly
-marked constants at the top of `update_check.py`; the upgrade command must stay
-in sync with the `### Upgrade` section of
-[`install.md`](install.md#upgrade).
+The repo/branch it reads are the clearly marked constants at the top of
+`update_check.py`.
+
+`shelley update` ([`shelley/commands/update.py`](../../shelley/commands/update.py))
+performs the upgrade: it detects whether the running shelley is a system-wide
+(`/opt/uv/tools`) or per-user install and runs the matching `uv tool upgrade
+shelley`. The system-install path constants there must stay in sync with the
+`### Upgrade` section of [`install.md`](install.md#upgrade).
 
 ### Release checklist
 

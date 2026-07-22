@@ -77,11 +77,10 @@ def test_cache_prevents_second_fetch(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# format_update_notice — surfaces the canonical upgrade command
+# format_update_notice — points users at `shelley update`
 # ---------------------------------------------------------------------------
 
-def test_notice_contains_upgrade_command():
+def test_notice_points_at_shelley_update():
     notice = update_check.format_update_notice("9.9.9")
     assert "9.9.9" in notice
-    assert "uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley" in notice
-    assert "uv tool update-shell" in notice
+    assert "shelley update" in notice

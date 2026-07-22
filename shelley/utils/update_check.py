@@ -9,9 +9,8 @@ and fails silently on any error so it can never break or slow a real command.
 Networking uses only the standard library (mirrors shelley/scripts/build_rsec_meta.py).
 
 Developers: the repo/branch this points at is the DEVELOPER CONFIG block below.
-The upgrade command surfaced to users is the self-service path, kept in sync with
-the "Install a newer version for yourself (per-user)" section of
-docs/how-to/install.md.
+The notice tells users to run ``shelley update`` (shelley/commands/update.py),
+which performs the upgrade for them.
 """
 
 from __future__ import annotations
@@ -33,12 +32,6 @@ REPO = "Sydney-Informatics-Hub/shelley"
 BRANCH = "main"
 MAIN_INIT_URL = (
     f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/shelley/__init__.py"
-)
-# The self-service upgrade command surfaced to users — keep in sync with the
-# per-user install section of docs/how-to/install.md.
-UPGRADE_COMMAND = (
-    "uv tool install git+https://github.com/Sydney-Informatics-Hub/shelley "
-    "&& uv tool update-shell"
 )
 # The rendered docs page the upgrade command lives on (clickable in the notice).
 DOCS_URL = (
@@ -140,10 +133,7 @@ def format_update_notice(latest: str) -> str:
     return (
         f"[status.warning]A newer shelley is available:[/status.warning] "
         f"[version]{__version__}[/version] [muted]→[/muted] [version]{latest}[/version]\n\n"
-        f"[header]To upgrade:[/header]\n"
-        f"  [muted]1.[/muted] Run in your terminal:\n"
-        f"     [command]{UPGRADE_COMMAND}[/command]\n"
-        f"  [muted]2.[/muted] Restart your shell.\n\n"
+        f"[header]To upgrade, run:[/header] [command]shelley update[/command]\n\n"
         f"[muted]More info: [link={DOCS_URL}]install guide[/link]   •   "
         f"silence this message with [command]export {OPT_OUT_ENV}=1[/command][/muted]"
     )
