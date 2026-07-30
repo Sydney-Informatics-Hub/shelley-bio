@@ -4,13 +4,40 @@ import os
 import re
 import shutil
 import subprocess
-from pathlib import Path
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
+from ..builder.shpc_settings import ensure_shared_shpc_settings
+from ..utils.globals import build_roots
 from ..utils.modules import load_build_modules
+from ..utils.perms import apply_build_umask, ensure_shared_layout
 from ..utils.style import (
     console, ShelleyStyle, print_info, print_warning, print_error, print_rule,
 )
+
+
+def needs_sudo() -> bool:
+    """Return True if this process cannot write everywhere a build needs to.
+
+    All three shared roots are checked, not just the modulefiles directory: on a fresh
+    machine /apps/shpc and /apps/local do not exist yet and creating them needs root.
+    A missing root counts as needing sudo — if we cannot see it, we certainly cannot
+    create it in place.
+    """
+    if os.geteuid() == 0:
+        return False
+    return any(not root.exists() or not os.access(root, os.W_OK) for root in build_roots())
+
+
+def sudo_env_args() -> list[str]:
+    """Environment assignments to hand to `sudo env` for the elevated re-exec.
+
+    PATH so the shelley launcher and shpc stay findable, and any SHELLEY_* override so
+    the elevated child agrees with us about where to build. `sudo -E` should preserve
+    them already, but it requires SETENV privilege and sudoers policy can deny it.
+    """
+    args = [f"PATH={os.environ['PATH']}"]
+    args += [f"{k}={v}" for k, v in sorted(os.environ.items()) if k.startswith("SHELLEY_")]
+    return args
 
 
 def resolve_shelley_executable() -> str | None:
@@ -32,10 +59,7 @@ def build_module(tool_spec: str, interactive: bool = False) -> bool:
 
     Returns True if the build succeeded, False otherwise.
     """
-    module_dir = Path("/apps/Modules/modulefiles")
-    needs_sudo = not os.access(module_dir, os.W_OK) if module_dir.exists() else True
-
-    if needs_sudo:
+    if needs_sudo():
         # Re-invoke with sudo, preserving the PATH so the shelley script is found.
         shelley_path = resolve_shelley_executable()
         if shelley_path is None:
@@ -43,7 +67,7 @@ def build_module(tool_spec: str, interactive: bool = False) -> bool:
             return False
 
         cmd = [
-            "sudo", "-E", "env", f"PATH={os.environ['PATH']}",
+            "sudo", "-E", "env", *sudo_env_args(),
             shelley_path, "build", tool_spec,
         ]
         if interactive:
@@ -63,11 +87,31 @@ def build_module(tool_spec: str, interactive: bool = False) -> bool:
             print_warning("Build cancelled by user")
             return False
 
+    # Set the umask before anything forks. sudo unions the caller's umask with the
+    # sudoers default, so without this a user with `umask 077` produces 0700 directories
+    # under /apps that no other user can enter. Deliberately not done at import time:
+    # the umask is process-global and read-only commands must not touch it.
+    apply_build_umask()
+
     # Load shpc + singularity here (not in CVMFSModuleBuilder.__init__) so it only
     # happens on the build path. This runs in whichever process actually performs the
     # install — including the elevated child after the sudo re-exec above — rather than
     # relying on `sudo -E` preserving the Lmod environment.
     load_build_modules()
+
+    # Bootstrap the shared layout before the settings file names the local registry:
+    # shpc raises on a registry path that does not exist.
+    try:
+        ensure_shared_layout()
+        ensure_shared_shpc_settings()
+    except (OSError, RuntimeError) as e:
+        console.print(ShelleyStyle.create_error_panel(
+            title="Build Failed",
+            message=str(e),
+            suggestion="Check write access to the shared build directories, or set "
+                       "SHELLEY_SHPC_BASE to a writable location",
+        ))
+        return False
 
     builder = CVMFSModuleBuilder()
 
