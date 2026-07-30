@@ -2,7 +2,6 @@
 
 import re
 from difflib import get_close_matches
-from pathlib import Path
 
 from rich.box import ROUNDED
 from rich.panel import Panel
@@ -14,9 +13,21 @@ from ..utils.cache import (
     compute_version_entries,
     load_versions_from_cache,
 )
-from ..utils.globals import LMOD_MODULES_PATH
+from ..utils.globals import lmod_modules
 from ..utils.render import paginate, print_find_hint, render_tool_table
 from ..utils.style import ShelleyStyle, console
+
+
+def module_is_installed(tool_id: str, version: str) -> bool:
+    """Return True if a usable Lmod module exists for tool_id at version.
+
+    A modulefile is a symlink into the shared shpc tree, so the name existing is not
+    enough — it has to resolve to something readable. Modules built before shelley moved
+    to a shared layout point into the original builder's home directory, which no other
+    user can traverse; reporting those as installed would promise a `module load` that
+    fails. ``is_file()`` is already False for a dangling symlink.
+    """
+    return any(p.is_file() for p in (lmod_modules() / tool_id).glob(f"{version}*.lua"))
 
 
 def find_tool_sync(tool_name: str, verbose: bool = False) -> None:
@@ -141,13 +152,12 @@ def _render_find_tool(payload: dict, verbose: bool = False) -> None:
     lines.append("\n")
 
     if containers and containers.get("available"):
-        lmod_path = Path(LMOD_MODULES_PATH)
         tool_id = tool.get("id", query) if tool else query
         all_versions = containers["all_versions"]
         total = containers["total_versions"]
 
         def _installed(version: str) -> bool:
-            return any((lmod_path / tool_id).glob(f"{version}*.lua"))
+            return module_is_installed(tool_id, version)
 
         def _glyph(flag: bool) -> str:
             return "[success]✓[/success]" if flag else "[muted]✗[/muted]"

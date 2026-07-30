@@ -4,6 +4,7 @@
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -380,6 +381,72 @@ def test_extract_aliases_returns_empty_on_failure():
     assert result == []
 
 
+@contextmanager
+def _scripted_guts_diff(diff_data):
+    """Patch guts so extract_aliases sees ``diff_data`` as the diff result.
+
+    Stubs the clone and the supplementary-db merge too, so nothing touches the
+    network or the filesystem.
+    """
+    gen = MagicMock()
+    gen.diff.return_value = {"docker.io/x:1.0": {"diff": diff_data}}
+    with patch("shelley.builder.guts_integration._sparse_clone_base_manifests",
+               return_value="/tmp/does-not-matter"), \
+         patch("shelley.builder.guts_integration._merge_supplementary_db"), \
+         patch("shelley.builder.guts_integration.shutil.rmtree"), \
+         patch("shelley.builder.guts_integration.ManifestGenerator",
+               return_value=gen):
+        yield
+
+
+def test_extract_aliases_ignores_paths_outside_bin_dirs():
+    """Only executables in a bin/sbin directory become aliases."""
+    from shelley.builder.guts_integration import extract_aliases
+    with _scripted_guts_diff({"unique_paths": ["/usr/local/bin/samtools",
+                                              "/opt/data/reference.fa"]}):
+        assert extract_aliases("/cvmfs/x") == [
+            {"name": "samtools", "command": "samtools"}
+        ]
+
+
+def test_extract_aliases_dedupes_the_same_executable_in_two_path_dirs():
+    """A binary present in two PATH dirs yields one alias, not two identical ones."""
+    from shelley.builder.guts_integration import extract_aliases
+    with _scripted_guts_diff({"unique_paths": ["/usr/bin/bwa",
+                                              "/usr/local/bin/bwa"]}):
+        assert extract_aliases("/cvmfs/x") == [{"name": "bwa", "command": "bwa"}]
+
+
+def test_extract_aliases_drops_shadowed_paths_by_default():
+    """Base binaries guts shadowed must not come back as aliases."""
+    from shelley.builder.guts_integration import extract_aliases
+    with _scripted_guts_diff({"unique_paths": ["/usr/local/bin/samtools"],
+                              "shadowed_paths": ["/sbin/devmem", "/usr/bin/tput"]}):
+        assert extract_aliases("/cvmfs/x") == [
+            {"name": "samtools", "command": "samtools"}
+        ]
+
+
+def test_extract_aliases_keep_readmits_a_tool_named_like_a_base_binary():
+    """A tool really called `sort` is shadowed by coreutils; keep= rescues it."""
+    from shelley.builder.guts_integration import extract_aliases
+    diff = {"unique_paths": [], "shadowed_paths": ["/usr/local/bin/sort",
+                                                  "/sbin/devmem"]}
+    with _scripted_guts_diff(diff):
+        assert extract_aliases("/cvmfs/x", keep="sort") == [
+            {"name": "sort", "command": "sort"}
+        ]
+
+
+def test_extract_aliases_tolerates_a_diff_without_shadowed_paths():
+    """Guards against an older container-guts that predates the new key."""
+    from shelley.builder.guts_integration import extract_aliases
+    with _scripted_guts_diff({"unique_paths": ["/usr/local/bin/fastp"]}):
+        assert extract_aliases("/cvmfs/x", keep="fastp") == [
+            {"name": "fastp", "command": "fastp"}
+        ]
+
+
 def test_shpc_install_skips_local_entry_for_upstream_tool(builder, tmp_path):
     """When version is in upstream registry, _ensure_local_registry_entry is not called."""
     tool, version = "samtools", "1.21--h96c455f_1"
@@ -480,7 +547,8 @@ def test_shpc_install_not_in_registry_calls_extract_aliases(builder, tmp_path):
          patch.object(builder, "_compute_sha256", return_value="deadbeef"):
         dest = builder.shpc_install(tool, version)
 
-    mock_extract.assert_called_once_with(expected_cvmfs)
+    # keep=tool so a tool named like a base binary survives guts' basename filter
+    mock_extract.assert_called_once_with(expected_cvmfs, keep=tool)
 
     import yaml
     config = yaml.safe_load(

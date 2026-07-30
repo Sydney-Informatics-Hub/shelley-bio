@@ -121,7 +121,7 @@ wheels = [
 [[package]]
 name = "container-guts"
 version = "0.0.17"
-source = { git = "https://github.com/Sydney-Informatics-Hub/guts.git?branch=singularity#8642666e0c185144f367488db631c88b55acb6f9" }
+source = { git = "https://github.com/Sydney-Informatics-Hub/guts.git?branch=singularity#54e46164d2af5a162ccdedb437d3fbdd2d539743" }
 
 [[package]]
 name = "exceptiongroup"

@@ -98,6 +98,27 @@ SHELLEY_THEME = Theme({
 # Global console instance with BioCommons theme
 console = Console(theme=SHELLEY_THEME, width=120)
 
+# Banner artwork, shared with the BioShell login banner (/etc/update-motd.d).
+# Every line is exactly BANNER_WIDTH cells wide; `{welcome}` is filled with the
+# inner content (BANNER_WIDTH - 2 cells) by create_banner().
+BANNER_WIDTH = 87
+BANNER_ART = """\
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                       ☆                              ★  ☆           │
+│                               ★                  ★                   ☆              │
+│       ☆         ☆                                                                   │
+│★           ★                                  ☆               ★                     │
+│            ☆                    ★                                                   │
+│                                                                    ★                │
+│            ████  ▒▒▒                                                      ☆         │
+│           ██████ ▒▘▒▒                          ★                                    │
+│        ▒▒████████▒▒                                                                 │
+│───────── ▒▒    ▒▒ ──────────────────────────────────────────────────────────────────│
+│                                                                                     │
+│{welcome}│
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘"""
+
 
 class ShelleyStyle:
     """Styling utilities for Shelley."""
@@ -118,54 +139,25 @@ class ShelleyStyle:
         )
     
     @staticmethod
-    def create_banner() -> Panel:
-        """Create the main Shelley banner with authentic BioCommons logo."""
-        # BioCommons logo using overlapping hexagon pattern with official colors
-        logo = f"""
-                    [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░                                   
-                   ░░░░░░░░░░░░░░░░░░░░░░░░░░░                                  
-                 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                                 
-                ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                               
-               ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                              
-              ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d]                             
-             [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]             
-            [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]            
-           [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]           
-          [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]          
-           [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░░░[/#5ac3b1]         
-            [#f49f1d]░░░░░░░░░░░░░░░░░░░░░░░[/#f49f1d][#2cb77c]░░░░░░░░░░░░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░░░░░[/#5ac3b1]        
-             [#f49f1d]░░░░░░░░[/#f49f1d][#8ea869]░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#2cb77c]░░░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1]   
-              [#f49f1d]░░░░░░[/#f49f1d][#8ea869]░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#2cb77c]░░░░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1] 
-                [#f49f1d]░░[/#f49f1d][#8ea869]░░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#2cb77c]▒░░[/#2cb77c][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1]
-                [#8ea869]░░░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1]   
-               [#ed087c]░▒▒[/#ed087c][#8ea869]░░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#b21e8d]▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1]
-              [#ed087c]▒▒▒▒▒[/#ed087c][#8ea869]░░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#b21e8d]▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1] 
-             [#ed087c]▒▒▒▒▒▒▒[/#ed087c][#8ea869]░░░░░░░░░░░░░░[/#8ea869][#205a86]▒▒▒▒▒▒▒▒▒▒▒[/#205a86][#b21e8d]▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░░░░░░░[/#5ac3b1]   
-           [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░░░░░[/#5ac3b1]       
-          [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░░░[/#5ac3b1]        
-         [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]           
-          [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]           
-           [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░░[/#5ac3b1]            
-            [#ed087c]░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒[/#ed087c][#b21e8d]▒▒▒▒▒▒▒▒▒▒[/#b21e8d][#5ac3b1]░░░░░░░░░░░░░░[/#5ac3b1]              
-              [#ed087c]▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                             
-               ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░                              
-                ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░                               
-                 ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░                                
-                  ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                                  
-                   ░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                                   
-                     ░░░░░░░░░░░░░░░░░░░░░░░[/#ed087c]
-"""
-        
+    def create_banner() -> Text:
+        """Create the main Shelley banner (shares the BioShell MOTD artwork).
+
+        The artwork draws its own frame, so it is returned as plain Text rather
+        than wrapped in a Panel. Keep it in sync with the login banner at
+        build/ansible/roles/motd/files/99-bioshell in the BioShell repo.
+        """
         from .. import __version__
 
-        return Panel(
-            Align.left(logo),
-            box=ROUNDED,
-            border_style="primary",
-            padding=(1, 3),
-            title=f"[primary][bold]🐢 Shelley Tool Finder[/bold][/primary] [version]v{__version__}[/version]"
+        left = "   Hey there, I'm Shelley!"
+        right = f"v{__version__}   "
+        pad = " " * max(1, BANNER_WIDTH - 2 - len(left) - len(right))
+        welcome = f"{left}{pad}{right}"
+
+        return Text.from_markup(
+            f"[bold {BIOCOMMONS_COLORS['teal']}]{BANNER_ART.format(welcome=welcome)}[/]"
         )
-    
+
+
     @staticmethod
     def create_help_table(commands: List[Dict[str, str]]) -> Table:
         """Create a styled help table."""

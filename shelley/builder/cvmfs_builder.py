@@ -15,13 +15,22 @@ from typing import List, Optional, Tuple
 import re
 import questionary
 from datetime import datetime
-from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH, LMOD_MODULES_PATH, LOCAL_REGISTRY, SHPC_BASE
+from shelley.utils import globals as gl
+from shelley.utils.globals import CVMFS_GALAXY_SINGULARITY_PATH
 from shelley.utils import console, ShelleyStyle
+from shelley.utils.perms import (
+    ensure_shared_dir, ensure_traversable, harden_tree, share_file,
+)
+from shelley.builder.shpc_settings import ensure_shared_shpc_settings
 from shelley.builder.guts_integration import (
     edit_aliases_interactive, extract_aliases, normalize_aliases,
 )
 
 log = logging.getLogger(__name__)
+
+# Where shpc lays out modules, wrappers and containers beneath each base: the
+# registry URI followed by the version tag.
+_SHPC_URI_PREFIX = ("quay.io", "biocontainers")
 
 def _shpc_bin() -> str:
     """Resolve the shpc executable at call time.
@@ -32,15 +41,33 @@ def _shpc_bin() -> str:
     """
     return shutil.which("shpc") or "/opt/shpc/bin/shpc"
 
+
+def _shpc_cmd(*args: str) -> list[str]:
+    """Build an shpc argv with shelley's shared settings file pinned.
+
+    Without this, shpc falls back to its own defaults — which put every install base
+    under $HOME, so a build under `sudo -E` lands in the invoking user's home where no
+    other user can read it. See shelley.builder.shpc_settings.
+
+    The flag is omitted when the file does not exist, because shpc hard-exits on a
+    missing --settings-file. That keeps read-only callers working on a machine that has
+    never been built on; the build path calls ensure_shared_shpc_settings() first, so it
+    always gets the flag.
+    """
+    settings = gl.shpc_settings_file()
+    prefix = [_shpc_bin()]
+    if settings.is_file():
+        prefix += ["--settings-file", str(settings)]
+    return prefix + list(args)
+
 def _load_registry_config(uri: str, local_yaml: Path, force_upstream: bool = False) -> dict:
     """Return the shpc registry config dict for uri.
 
     Loads from local_yaml if it exists (unless force_upstream=True).  Otherwise
     fetches the upstream shpc-registry container.yaml and saves it to local_yaml
-    (best-effort; silently skips the write on PermissionError so read-only callers
-    still get a result; also skipped when force_upstream=True to avoid polluting the
-    local cache with a forced read).  Returns an empty dict if neither source is
-    reachable.
+    (best-effort; silently skips the write on OSError so read-only callers still get a
+    result; also skipped when force_upstream=True to avoid polluting the local cache
+    with a forced read).  Returns an empty dict if neither source is reachable.
     """
     if not force_upstream and local_yaml.exists():
         with open(local_yaml) as f:
@@ -63,17 +90,21 @@ def _load_registry_config(uri: str, local_yaml: Path, force_upstream: bool = Fal
     config = yaml.safe_load(result.stdout) or {}
 
     if not force_upstream:
+        # Best-effort: this also runs on the read path (get_registry_tags) as an
+        # unprivileged user, where the registry is root-owned and both the write and
+        # the chmod are expected to fail.
         try:
-            local_yaml.parent.mkdir(parents=True, exist_ok=True)
+            ensure_shared_dir(local_yaml.parent)
             with open(local_yaml, "w") as f:
                 yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-        except PermissionError:
+            share_file(local_yaml)
+        except OSError:
             pass
 
     return config
 
 
-def get_registry_tags(tool_name: str, local_registry: str = "/apps/local",
+def get_registry_tags(tool_name: str, local_registry: str | None = None,
                       upstream_only: bool = False) -> set:
     """Return the set of version tags known to shpc for tool_name.
 
@@ -81,9 +112,13 @@ def get_registry_tags(tool_name: str, local_registry: str = "/apps/local",
     ignoring any locally-cached container.yaml.  Use this to check whether a
     specific version exists in the upstream registry before deciding to create a
     local entry.
+
+    ``local_registry`` defaults to the shared local registry, resolved at call time so
+    the SHELLEY_LOCAL_REGISTRY override applies (a module-level default would bind at
+    import and ignore it).
     """
     uri = f"quay.io/biocontainers/{tool_name}"
-    local_yaml = Path(local_registry) / uri / "container.yaml"
+    local_yaml = Path(local_registry or gl.local_registry()) / uri / "container.yaml"
     config = _load_registry_config(uri, local_yaml, force_upstream=upstream_only)
     return set(config.get("tags", {}).keys())
 
@@ -94,7 +129,7 @@ class CVMFSModuleBuilder:
     def __init__(
         self,
         cvmfs_singularity: str = CVMFS_GALAXY_SINGULARITY_PATH,
-        lmod_modules: str = LMOD_MODULES_PATH
+        lmod_modules: str | None = None,
     ):
         # Kept side-effect-free on purpose: read-only callers (e.g.
         # list_cvmfs_versions, find) construct this builder without needing shpc or
@@ -102,7 +137,9 @@ class CVMFSModuleBuilder:
         # the build path (shelley.utils.modules.load_build_modules) so shelley stays
         # uvx-able for read-only commands on non-BioShell systems.
         self.cvmfs_singularity = cvmfs_singularity
-        self.lmod_modules = lmod_modules
+        # Resolved here rather than as a default argument so the SHELLEY_LMOD_MODULES_PATH
+        # override applies (a default would bind at import time).
+        self.lmod_modules = lmod_modules if lmod_modules is not None else str(gl.lmod_modules())
         self.cvmfs_singularity_path = Path(self.cvmfs_singularity)
         self.lmod_modules_path = Path(self.lmod_modules)
 
@@ -218,30 +255,28 @@ class CVMFSModuleBuilder:
         log.info(msg)
         
         result = subprocess.run(
-            [_shpc_bin(), "install", uri_tag, container_path, "--keep-path"],
+            _shpc_cmd("install", uri_tag, container_path, "--keep-path"),
             capture_output=True, text=True,
         )
         return result.returncode, result.stdout + result.stderr
 
     def _register_local_registry(self, local_registry: str) -> None:
-        """Ensure local_registry is in shpc's registry search path (best-effort)."""
+        """Ensure local_registry is in shpc's registry search path (best-effort).
+
+        Rewrites shelley's own settings file rather than shelling out to
+        `shpc config add registry`, which would call shpc's save() and expand our small
+        override file into a frozen snapshot of every site default.
+        """
         try:
-            result = subprocess.run(
-                [_shpc_bin(), "config", "get", "registry"],
-                capture_output=True, text=True,
-            )
-            if local_registry not in result.stdout:
-                subprocess.run(
-                    [_shpc_bin(), "config", "add", "registry", local_registry],
-                    capture_output=True, text=True, check=True,
-                )
-                log.info("Registered local registry with shpc: %s", local_registry)
+            ensure_shared_dir(Path(local_registry))
+            ensure_shared_shpc_settings()
+            log.info("Local registry is in shpc's search path: %s", local_registry)
         except Exception as e:
             log.warning("Could not register local registry with shpc: %s", e)
 
     def _ensure_local_registry_entry(
         self, tool_name: str, version: str, container_path: str, uri: str,
-        local_registry: str = LOCAL_REGISTRY, interactive: bool = False,
+        local_registry: str | None = None, interactive: bool = False,
         in_upstream: bool = False, status=None,
     ) -> list[dict]:
         """
@@ -252,9 +287,9 @@ class CVMFSModuleBuilder:
         the upstream entry (when ``in_upstream``) or from a guts diff of the SIF
         otherwise; when ``interactive`` is set they are curated interactively first.
         """
-        registry_dir = Path(local_registry) / uri
+        registry_dir = Path(local_registry or gl.local_registry()) / uri
         registry_yaml = registry_dir / "container.yaml"
-        registry_dir.mkdir(parents=True, exist_ok=True)
+        ensure_shared_dir(registry_dir)
 
         # Download upstream entry as a base (best-effort; tool may not be in upstream at all)
         remote_url = (
@@ -273,7 +308,9 @@ class CVMFSModuleBuilder:
         if in_upstream:
             aliases = normalize_aliases(config.get("aliases") or [])
         else:
-            aliases = extract_aliases(container_path)
+            # keep=tool so a tool sharing a name with a base binary survives
+            # the basename subtraction in the guts diff.
+            aliases = extract_aliases(container_path, keep=tool_name)
             if not aliases:
                 log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
 
@@ -292,15 +329,61 @@ class CVMFSModuleBuilder:
         sha256 = self._compute_sha256(container_path)
         config.setdefault("tags", {})[version] = f"sha256:{sha256}"
 
-        registry_yaml.parent.mkdir(parents=True, exist_ok=True)
+        ensure_shared_dir(registry_yaml.parent)
         with open(registry_yaml, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        # curl wrote this file above under the ambient umask; make it readable
+        # unconditionally so every user's `shelley find` can consult the entry.
+        share_file(registry_yaml)
 
         return aliases
 
     def _shpc_uninstall(self, uri_tag: str) -> None:
         """Uninstall an existing shpc entry (best-effort; ignores errors)."""
-        subprocess.run([_shpc_bin(), "uninstall", "--force", uri_tag], capture_output=True, text=True)
+        subprocess.run(_shpc_cmd("uninstall", "--force", uri_tag), capture_output=True, text=True)
+
+    def _shpc_module_base(self) -> Path:
+        """Ask shpc where it installed the module.
+
+        Queried rather than assumed so that an operator edit to the settings file is
+        honoured, but falls back to the shared default: an empty or failed query must not
+        become an unhandled exception after a successful install.
+        """
+        result = subprocess.run(
+            _shpc_cmd("config", "get", "module_base"),
+            capture_output=True, text=True,
+        )
+        reported = result.stdout.strip() if result.returncode == 0 else ""
+        if not reported:
+            log.warning(
+                "Could not read module_base from shpc (rc=%s); assuming %s",
+                result.returncode, gl.shpc_module_base(),
+            )
+            return gl.shpc_module_base()
+        return Path(reported)
+
+    def _share_build_artifacts(self, module_base: Path, tool_name: str, uri: str) -> None:
+        """Make this tool's artifacts readable and executable by every user.
+
+        Scoped to this tool's subtrees rather than walking the whole shpc base, which
+        would cost more on every build as modules accumulate.
+
+        Hardening stops at the tool directory, not the version directory: shpc writes a
+        `.version` file alongside the versions to tell Lmod which is the default, and an
+        unreadable one breaks a bare `module load <tool>` for everyone else.
+        """
+        subtrees = [
+            module_base.joinpath(*_SHPC_URI_PREFIX, tool_name),
+            gl.shpc_wrapper_base().joinpath(*_SHPC_URI_PREFIX, tool_name),
+            gl.shpc_container_base().joinpath(*_SHPC_URI_PREFIX, tool_name),
+            gl.local_registry() / uri,
+        ]
+        for subtree in subtrees:
+            # ensure_traversable covers the intermediate quay.io/biocontainers/<tool>
+            # levels, which shpc created with a bare makedirs under whatever umask was
+            # in force. One non-traversable component hides everything below it.
+            ensure_traversable(subtree)
+            harden_tree(subtree)
 
     def shpc_install(self, tool_name: str, version: str,
                      interactive: bool = False, status=None) -> Path:
@@ -326,9 +409,11 @@ class CVMFSModuleBuilder:
         uri_tag = f"{uri}:{version}"
         container_path = str(self.cvmfs_singularity_path / f"{tool_name}:{version}")
 
+        local_registry = gl.local_registry()
+
         # One upstream fetch gives us both the tag check and the upstream aliases
         # (used for the empty-alias warning below without a second request).
-        upstream_local_yaml = Path(LOCAL_REGISTRY) / uri / "container.yaml"
+        upstream_local_yaml = local_registry / uri / "container.yaml"
         upstream_config = _load_registry_config(uri, upstream_local_yaml, force_upstream=True)
         in_upstream = version in upstream_config.get("tags", {})
 
@@ -343,12 +428,12 @@ class CVMFSModuleBuilder:
                 tool_name, version, container_path, uri,
                 interactive=interactive, in_upstream=in_upstream, status=status,
             )
-            self._register_local_registry(LOCAL_REGISTRY)
+            self._register_local_registry(str(local_registry))
             if not in_upstream:
                 console.print(ShelleyStyle.create_warning_panel(
                     "Tag not in registry",
                     f"{uri}:{version} is not in the upstream shpc-registry. "
-                    f"A local entry has been created in {LOCAL_REGISTRY}.",
+                    f"A local entry has been created in {local_registry}.",
                 ))
         else:
             final_aliases = normalize_aliases(upstream_config.get("aliases") or [])
@@ -365,25 +450,18 @@ class CVMFSModuleBuilder:
                 f"shpc install failed for {uri_tag}:\n{output.strip()}"
             )
 
-        # When running as root via sudo, new shpc dirs are created as root.
-        # Restore ownership to the original user so non-root shpc calls (e.g. tests)
-        # can write to the same paths without re-running as root.
-        import os as _os
-        sudo_user = _os.environ.get("SUDO_USER")
-        if _os.getuid() == 0 and sudo_user:
-            subprocess.run(
-                ["chown", "-R", f"{sudo_user}:{sudo_user}", SHPC_BASE],
-                capture_output=True, text=True,
-            )
+        module_base = self._shpc_module_base()
 
-        shpc_module_base = Path(subprocess.run(
-            [_shpc_bin(), "config", "get", "module_base"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip())
-        src = shpc_module_base / "quay.io" / "biocontainers" / tool_name / version / "module.lua"
+        # Artifacts are created by root (the build path re-execs under sudo) but every
+        # user on the machine has to be able to read the module and run its wrappers.
+        # This deliberately replaces an older `chown -R $SUDO_USER` — handing the tree
+        # to one account is what made builds single-user in the first place.
+        self._share_build_artifacts(module_base, tool_name, uri)
+
+        src = module_base.joinpath(*_SHPC_URI_PREFIX, tool_name, version, "module.lua")
         dest_dir = self.lmod_modules_path / tool_name
         dest = dest_dir / f"{version}.lua"
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        ensure_shared_dir(dest_dir)
         if dest.is_symlink() or dest.exists():
             dest.unlink()
         dest.symlink_to(src)

@@ -74,10 +74,17 @@ uv run pytest -m "not network"            # exclude network tests when offline
 
 ### Version is single-sourced
 
-The version lives in **one** place — `__version__` in
+The version the *package* reports lives in **one** place — `__version__` in
 [`shelley/__init__.py`](../../shelley/__init__.py). `pyproject.toml` reads it
 dynamically (`[tool.hatch.version]`), and `shelley --version` reports it. Never
-edit a version string anywhere else.
+add another version string that something else derives from.
+
+The one place that must be **mirrored by hand** is
+[`CITATION.cff`](../../CITATION.cff): its `version` and `date-released` fields feed
+GitHub's "Cite this repository" widget and Zenodo, and nothing derives them from
+`__version__`. They silently go stale if you forget — which is exactly what happened
+between 0.1.0 and 0.3.0. Step 1 of the checklist covers both files; treat them as one
+edit.
 
 ### Update check
 
@@ -114,10 +121,13 @@ On `dev`:
    today's date, and add the release link at the bottom.
 3. Confirm the build and version resolve:
    ```bash
-   uv build                     # builds shelley-<version>.{whl,tar.gz}
-   uv run shelley --version     # should print the new version
-   uv run pytest -m "not cvmfs" # tests green
+   uv build                                  # builds shelley-<version>.{whl,tar.gz}
+   uv run shelley --version                  # should print the new version
+   uv run --extra dev pytest -m "not cvmfs"  # tests green
    ```
+   `pytest` lives in the `dev` extra, so it needs `--extra dev` (or a prior
+   `uv sync --extra dev`, which is what CI does) — plain `uv run pytest` fails to
+   spawn.
 4. Commit and open a PR into `main`; merge once CI passes.
 
 On `main`, after merge:
@@ -125,7 +135,7 @@ On `main`, after merge:
 5. Tag and push:
    ```bash
    git checkout main && git pull
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
 6. Create the GitHub release from the tag, pasting the CHANGELOG entry as notes.
