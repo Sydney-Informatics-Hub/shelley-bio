@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `shelley find` no longer reports a module as installed when its modulefile symlink does
   not resolve to a readable file — which is the case for every module built by an earlier
   version into a home directory.
+- **The sudo re-exec now re-runs the shelley that is actually running**, via
+  `sys.executable -m shelley`, instead of resolving `shelley` on `PATH`. A PATH lookup can
+  find a *different installation*: with a system-wide shelley present, running a checkout
+  handed the privileged half of the build to the system copy, so the process that actually
+  installs could be an older version. The symptom was baffling — the unprivileged half
+  printed the new version's output while the build behaved like the old one, writing to
+  `$HOME/shpc` anyway. Requires the new `shelley/__main__.py`.
 
 ### Changed
 

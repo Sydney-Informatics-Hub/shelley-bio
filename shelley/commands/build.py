@@ -1,9 +1,11 @@
 """Build command — install Lmod modules from CVMFS."""
 
+import importlib.util
 import os
 import re
 import shutil
 import subprocess
+import sys
 
 from ..builder.cvmfs_builder import CVMFSModuleBuilder
 from ..builder.shpc_settings import ensure_shared_shpc_settings
@@ -41,14 +43,34 @@ def sudo_env_args() -> list[str]:
 
 
 def resolve_shelley_executable() -> str | None:
-    """Locate the installed `shelley` launcher on PATH.
+    """Locate an installed `shelley` launcher on PATH.
 
-    Used to re-invoke ourselves under sudo. We rely on PATH rather than deriving
-    a path from __file__, because the launcher and the package live in unrelated
-    directories under a `uv tool install` layout (the launcher is in
+    Fallback only — see reexec_command, which prefers the running interpreter. We rely on
+    PATH rather than deriving a path from __file__, because the launcher and the package
+    live in unrelated directories under a `uv tool install` layout (the launcher is in
     .../uv/tools/shelley/bin/, the package in .../site-packages/shelley/).
     """
     return shutil.which("shelley")
+
+
+def reexec_command() -> list[str] | None:
+    """Return the argv prefix that re-invokes *this* shelley under sudo.
+
+    `sys.executable -m shelley` re-runs the exact package that is running now. A PATH
+    lookup cannot guarantee that: with a system-wide shelley installed, `uv run shelley
+    build` in a checkout would re-exec the *system* copy for the privileged half of the
+    build, so the elevated process — the one that actually installs — could be a
+    different, older version. That failure is near-invisible: the unprivileged half
+    prints the new version's output while the build itself behaves like the old one.
+
+    Falls back to a PATH lookup only if this package is somehow not importable by name,
+    which should not happen since we are executing from inside it.
+    """
+    if importlib.util.find_spec("shelley") is not None:
+        return [sys.executable, "-m", "shelley"]
+
+    launcher = resolve_shelley_executable()
+    return [launcher] if launcher else None
 
 
 def build_module(tool_spec: str, interactive: bool = False) -> bool:
@@ -60,15 +82,15 @@ def build_module(tool_spec: str, interactive: bool = False) -> bool:
     Returns True if the build succeeded, False otherwise.
     """
     if needs_sudo():
-        # Re-invoke with sudo, preserving the PATH so the shelley script is found.
-        shelley_path = resolve_shelley_executable()
-        if shelley_path is None:
+        # Re-invoke this same shelley with sudo, preserving PATH so shpc stays findable.
+        launcher = reexec_command()
+        if launcher is None:
             print_error("Could not locate the 'shelley' executable on PATH")
             return False
 
         cmd = [
             "sudo", "-E", "env", *sudo_env_args(),
-            shelley_path, "build", tool_spec,
+            *launcher, "build", tool_spec,
         ]
         if interactive:
             cmd.append("--interactive")

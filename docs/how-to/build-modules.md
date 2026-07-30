@@ -91,6 +91,38 @@ builder — showing a progress table and results summary for each tool.
 
 ## Troubleshooting
 
+### A build still writes to `$HOME/shpc`
+
+That is the signature of an **older shelley** doing the install. Because a build re-execs
+under sudo, the process that actually installs is what matters — and shelley ≤0.2.0
+resolved that process by looking up `shelley` on `PATH`, which can find a different
+installation than the one you invoked. Running a checkout on a machine that also has a
+system-wide `shelley` would silently hand the privileged half of the build to the
+system copy.
+
+Check which shelley is doing the work:
+
+```bash
+which -a shelley          # more than one? the system copy may be winning
+shelley --version         # the one on PATH
+uv run shelley --version  # the checkout
+```
+
+Current versions re-exec via `python -m shelley` from the running interpreter, so this
+cannot happen. If you see it, the install performing the build predates that fix — upgrade
+the system-wide copy with `shelley update`, or invoke the checkout explicitly:
+
+```bash
+uv run python -m shelley build <tool>
+```
+
+A second symptom of the same cause: shelley ≤0.2.0 ran `shpc config add registry
+/apps/local`, which edits the root-owned central shpc settings at
+`/opt/shpc/singularity-hpc/shpc/settings.yml`. Current versions never touch that file. If
+`registry:` there mentions `/apps/local`, an old build wrote it; the line is safe to remove,
+and worth removing, because a filesystem registry path that stops existing makes *every*
+`shpc` command fail for every user on the machine.
+
 ### A module is listed by `module avail` but `module load` fails for other users
 
 Modules built before shelley moved to a shared layout (v0.2.0 and earlier) were installed
