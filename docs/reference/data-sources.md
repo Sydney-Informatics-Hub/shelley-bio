@@ -8,12 +8,57 @@ Technical facts about every data artifact shelley bundles or reads at runtime.
 
 Paths involved in a `shelley build` run, in the order they are touched:
 
-| Path | Written by | Why it matters |
-|---|---|---|
-| `/cvmfs/singularity.galaxyproject.org/all/` | Galaxy Project (read-only) | Source SIF files; `shelley build` reads from here, never writes |
-| `/apps/local/` | `shelley build` | Local shpc registry: `container.yaml` files for tool versions **absent** from the upstream shpc-registry |
-| `/apps/shpc/` | shpc | shpc install base; contains `modules/` (generated `module.lua` + wrapper scripts) and `containers/` |
-| `/apps/Modules/modulefiles/<tool>/<version>.lua` | `shelley build` | Symlink into `/apps/shpc/modules/`; what `module avail` and `module load <tool>/<version>` resolves |
+| Path | Written by | Owner / mode | Why it matters |
+|---|---|---|---|
+| `/cvmfs/singularity.galaxyproject.org/all/` | Galaxy Project (read-only) | — | Source SIF files; `shelley build` reads from here, never writes |
+| `/apps/shpc/settings.yml` | `shelley build` | `root:root` `0644` | shelley-managed shpc settings, passed to every `shpc` call as `--settings-file`. Do not edit; regenerated on each build |
+| `/apps/shpc/modules/` | shpc | `root:root` `0755` | shpc `module_base` — generated `module.lua` and the `.version` default marker |
+| `/apps/shpc/wrappers/` | shpc | `root:root` `0755` (scripts `0755`) | shpc `wrapper_base` — the per-alias wrapper scripts a loaded module puts on `PATH` |
+| `/apps/shpc/containers/` | shpc | `root:root` `0755` | shpc `container_base` — near-empty, because `shpc install --keep-path` references the SIF in CVMFS instead of copying it |
+| `/apps/shpc/views/` | shpc | `root:root` `0755` | shpc `views_base` — unused by shelley, created so `shpc view` stays usable |
+| `/apps/local/` | `shelley build` | `root:root` `0755` (files `0644`) | Local shpc registry: `container.yaml` files for tool versions **absent** from the upstream shpc-registry, and for interactively curated aliases |
+| `/apps/Modules/modulefiles/<tool>/<version>.lua` | `shelley build` | symlink (mode not applicable) | Symlink into `/apps/shpc/modules/`; what `module avail` and `module load <tool>/<version>` resolve |
+
+### Permissions model
+
+Artifacts are **root-owned and world read + execute**: directories `0755`, files `0644`,
+wrapper scripts `0755`, and never group- or other-writable. Any user on the machine can
+`module load` a tool that any admin built; only the privileged build path writes.
+
+Two mechanisms enforce this, because either alone leaves a gap:
+
+- **`umask 022`**, set by `shelley build` before anything forks, so every file shpc
+  creates starts out shared. Needed because `sudo` unions the caller's umask with the
+  sudoers default — a user with `umask 077` would otherwise produce `0700` directories
+  inside `/apps`.
+- **an explicit `chmod` pass** over the subtrees the build touched (`a+rX` semantics:
+  a file the owner can execute becomes `0755`, everything else `0644`). This catches
+  directories created by an earlier build under a stricter umask, or by a direct `shpc`
+  call outside shelley. It is scoped per tool, not to all of `/apps/shpc`, so build time
+  does not grow as modules accumulate. Symlinks are skipped, never chmodded — `chmod`
+  follows them, which would reach into read-only CVMFS.
+
+shelley does **not** `chown` artifacts to the invoking user. Doing so would make the tree
+single-user, and would let one unprivileged account rewrite modules everyone else runs.
+
+### Overriding the layout
+
+The three roots honour environment variables, mainly for testing (the test suite
+redirects them into a tmp directory) and for a differently provisioned host:
+
+| Variable | Default |
+|---|---|
+| `SHELLEY_SHPC_BASE` | `/apps/shpc` |
+| `SHELLEY_LOCAL_REGISTRY` | `/apps/local` |
+| `SHELLEY_LMOD_MODULES_PATH` | `/apps/Modules/modulefiles` |
+
+They are forwarded explicitly across the `sudo` re-exec, so the elevated child agrees
+with the parent about where to build.
+
+> `SHELLEY_SHPC_BASE` is effectively write-once. A generated `module.lua` bakes in
+> absolute wrapper and container paths, so changing the base after modules exist leaves
+> every existing module pointing at a path that no longer holds anything. Rebuild rather
+> than relocate.
 
 ---
 
@@ -220,3 +265,26 @@ module load shpc
 ```
 
 In environments without the module system (e.g. GitHub Actions CI), `test_run_shpc_install_missing_cvmfs_path` will fail with `FileNotFoundError` rather than being skipped. This is a tracked known issue; the test is intentionally left as a documented failure until shpc path discovery is added to the builder.
+
+### The shared settings file must exist before it is named
+
+`shpc` exits with `"<path> does not exist."` if `--settings-file` points at a missing
+file. shelley therefore omits the flag when `/apps/shpc/settings.yml` is absent, so
+read-only commands still work on a machine that has never been built on. The build path
+creates the file first, so a build always gets the shared layout.
+
+### `/apps/local` must exist whenever it is in the registry list
+
+shpc resolves its whole `registry` list eagerly, and a filesystem registry path that does
+not exist raises `ValueError: No matching registry provider for /apps/local` on *every*
+shpc command, including `config get`. shelley guards this twice: the directory is created
+before the settings file is written, and the entry is dropped from the generated list if
+the directory is somehow missing.
+
+### A per-user `~/.singularity-hpc/settings.yml` is ignored
+
+`--settings-file` is the highest-precedence layer in shpc's resolution chain, above
+`~/.singularity-hpc/settings.yml` and above the central `/opt` defaults. This is
+deliberate: it is what stops a per-user shpc config from redirecting a shared build back
+into someone's home directory. A user running `shpc` directly still gets their own layout;
+their modules simply are not shared.

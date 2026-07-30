@@ -5,6 +5,63 @@ All notable changes to shelley are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`shelley build` now produces modules every user on the machine can load.** shelley
+  never told `shpc` where to install, so it inherited shpc's default of
+  `module_base: $HOME/shpc/modules`. Because the build re-execs under `sudo -E`, which
+  preserves `HOME`, root wrote the modules and wrapper scripts into the *invoking user's*
+  home directory — unreadable and untraversable by anyone else, leaving the modulefile
+  symlink under `/apps/Modules/modulefiles` pointing into an inaccessible tree.
+  Artifacts now land under `/apps/shpc` and `/apps/local` as documented.
+- Build artifacts are readable and executable by all users: directories `0755`, files
+  `0644`, wrapper scripts `0755`, never group- or other-writable. Enforced by a
+  `umask 022` set before anything forks, plus an explicit `chmod` pass over the subtrees
+  each build touched. A restrictive umask in the invoking shell no longer leaks into
+  `/apps`.
+- `/apps/shpc` and `/apps/local` are created on first build. Previously nothing created
+  them, and the one line referencing `/apps/shpc` targeted a path that did not exist.
+- The sudo probe now covers all three build roots, not just
+  `/apps/Modules/modulefiles`, so a first run on a fresh machine escalates correctly.
+- `shelley find` no longer reports a module as installed when its modulefile symlink does
+  not resolve to a readable file — which is the case for every module built by an earlier
+  version into a home directory.
+
+### Changed
+
+- Every `shpc` invocation is pinned to a shelley-managed settings file at
+  `/apps/shpc/settings.yml` via `--settings-file`. This is the highest-precedence layer in
+  shpc's resolution chain, so a per-user `~/.singularity-hpc/settings.yml` can no longer
+  redirect a shared build. The file is partial — shpc still merges its own defaults
+  underneath — and is regenerated only when stale.
+- `/apps/local` is declared in that settings file rather than registered with
+  `shpc config add registry`, which would have expanded the override file into a frozen
+  snapshot of every site default.
+
+### Added
+
+- `SHELLEY_SHPC_BASE`, `SHELLEY_LOCAL_REGISTRY` and `SHELLEY_LMOD_MODULES_PATH` override
+  the build roots (defaults `/apps/shpc`, `/apps/local`,
+  `/apps/Modules/modulefiles`). They are forwarded explicitly across the sudo re-exec, so
+  the elevated child agrees with the parent. Note that `SHELLEY_SHPC_BASE` is effectively
+  write-once: a generated `module.lua` bakes in absolute paths, so changing it after
+  modules exist invalidates them.
+
+### Removed
+
+- The `chown -R $SUDO_USER:$SUDO_USER` over the shpc base. Handing the tree to a single
+  account is what made builds single-user, and it let one unprivileged user rewrite
+  modules everyone else executes.
+
+### Migration
+
+Modules built with 0.2.0 or earlier live under the original builder's home directory and
+cannot be salvaged — `module.lua` bakes in absolute wrapper and container paths, so they
+cannot be moved or chmodded into working order. Find them with
+`find /apps/Modules/modulefiles -type l -lname '/home/*'` and rebuild those tools.
+
 ## [0.2.0] - 2026-07-22
 
 Pinned version for BioShell launch.

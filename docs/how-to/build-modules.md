@@ -12,6 +12,39 @@ shelley resolves the most recent available version from CVMFS, runs `shpc instal
 module load <tool>
 ```
 
+## Where artifacts go
+
+Builds are shared. Everything lands under `/apps`, owned by `root` and readable and
+executable by every user on the machine:
+
+```
+/apps/shpc/modules/quay.io/biocontainers/<tool>/<version>/module.lua
+/apps/shpc/wrappers/quay.io/biocontainers/<tool>/<version>/bin/*
+/apps/Modules/modulefiles/<tool>/<version>.lua   -> symlink to the module.lua above
+```
+
+Nothing is written to your home directory. See
+[docs/reference/data-sources.md](../reference/data-sources.md) for the full path table and
+the permissions model.
+
+## Other users on this machine
+
+Any user can load a module that any admin built — no extra setup, no rebuild per user:
+
+```bash
+module load singularity <tool>/<version>
+<tool> --version
+```
+
+`module load singularity` is needed because the generated module's wrapper scripts invoke
+`singularity` from `PATH`.
+
+Use this as the acceptance check after a build, as a different account:
+
+```bash
+sudo -u <someone-else> -H bash -lc 'cd ~ && module load singularity <tool>/<version> && <tool> --version'
+```
+
 ### Specify a version
 
 ```bash
@@ -52,4 +85,28 @@ builder — showing a progress table and results summary for each tool.
 
 - `shpc` must be on PATH (`module load shpc`)
 - CVMFS must be mounted at `/cvmfs/singularity.galaxyproject.org/`
-- Write access to `/apps/Modules/modulefiles/` — shelley will prompt for sudo if needed
+- Write access to `/apps/Modules/modulefiles/`, `/apps/shpc/` and `/apps/local/` — shelley
+  will prompt for sudo if needed. The latter two are created on first build, so a fresh
+  machine always needs sudo.
+
+## Troubleshooting
+
+### A module is listed by `module avail` but `module load` fails for other users
+
+Modules built before shelley moved to a shared layout (v0.2.0 and earlier) were installed
+into the *builder's* home directory, which no other user can read. The modulefile symlink
+still exists, so `module avail` lists it, but loading it only works for the original
+builder.
+
+Find them:
+
+```bash
+find /apps/Modules/modulefiles -xtype l                 # dangling symlinks
+find /apps/Modules/modulefiles -type l ! -readable      # unreadable targets
+find /apps/Modules/modulefiles -type l -lname '/home/*' # pointing into a home directory
+```
+
+There is no migration — `module.lua` bakes in absolute paths, so the files cannot be moved
+or chmodded into working order. Rebuild the affected tools with the current shelley.
+`shelley find <tool> -v` will not mark these as installed, since it checks that the
+symlink actually resolves.
