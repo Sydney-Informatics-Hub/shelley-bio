@@ -308,7 +308,9 @@ class CVMFSModuleBuilder:
         if in_upstream:
             aliases = normalize_aliases(config.get("aliases") or [])
         else:
-            aliases = extract_aliases(container_path)
+            # keep=tool so a tool sharing a name with a base binary survives
+            # the basename subtraction in the guts diff.
+            aliases = extract_aliases(container_path, keep=tool_name)
             if not aliases:
                 log.warning("No aliases extracted for %s; module will have no wrapper scripts", container_path)
 

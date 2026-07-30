@@ -91,6 +91,19 @@ The two current manifests cover slightly different conda installations:
 
 Without `continuumio/miniconda3`, roughly 100 extra conda-infrastructure executables appear as tool aliases.
 
+## The relocation problem — why base images leaked through the diff
+
+Adding manifests to the subtraction set only helps when the base image and the tool container agree on _where_ a binary lives. They often don't, and until [container-guts](https://github.com/Sydney-Informatics-Hub/guts) grew basename matching, the diff compared whole path strings and so missed every relocated copy:
+
+- shpc-guts' `busybox` manifests record every applet at `/bin/<name>`. BioContainers images built on busybox symlink the same applets into `/sbin`, `/usr/bin` and `/usr/sbin`. `/bin/devmem` and `/sbin/devmem` are different strings, so `devmem` came back as unique to the tool.
+- Ubuntu keeps ncurses at `/usr/bin/{clear,reset,tic,tput}`; conda ships its own copies under `/usr/local/bin/`. Same failure.
+
+On the `biocontainers/samtools` reference diff in the guts repo this accounted for 22 of 29 alias candidates — `devmem`, `freeramdisk`, `makedevs`, `runlevel`, `dnsd`, `inetd`, `telnet`, `tftp`, `lspci`, `clear`, `reset`, `tic`, `tput` and friends. Crucially, **adding base images does not fix it**: all 29 still survived with `debian`, `centos` and `fedora` added to the subtraction set, because the problem was never a missing image. That measurement is also why those three families are deliberately absent from `BASE_IMAGE_NAMESPACES` — once basename matching is doing the work, `ubuntu` and `busybox` plus the conda manifests supply every name the other families would, and the reference diff returns an identical alias list either way.
+
+The fix lives in guts, not shelley: `Database.diff` now also drops entries whose *basename* belongs to a base image, and reports them under a new `shadowed_paths` key. An executable on PATH is identified by its name, not its absolute location, so this belongs in the library where every guts consumer benefits. `unique_fs` is deliberately left as a plain path-level difference, since `guts similar` scores off it.
+
+Shelley keeps one piece of policy on top: basename matching would also drop a tool legitimately named like a base binary (`sort`, `time`, `join`), so `extract_aliases` takes a `keep=` argument — the tool name — and pulls that one back out of `shadowed_paths`.
+
 ## Local registry fallback — when and why it triggers
 
 The upstream [shpc-registry](https://github.com/singularityhub/shpc-registry) does not carry every version of every tool. Older patch releases and some tools are present in CVMFS but absent from the registry.

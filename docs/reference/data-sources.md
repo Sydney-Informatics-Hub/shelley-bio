@@ -227,6 +227,8 @@ Current manifests:
 | `anaconda/miniconda:latest` | `/opt/miniconda3/bin` | Base conda tooling |
 | `continuumio/miniconda3:latest` | `/opt/conda/bin` | Python-3 conda layer used by BioContainers |
 
+The base OS families themselves are not committed here — they are sparse-cloned at build time from shpc-guts per `BASE_IMAGE_NAMESPACES` in `shelley/builder/guts_integration.py`.
+
 ---
 
 ## Regression tool matrix
