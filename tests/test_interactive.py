@@ -190,11 +190,6 @@ def test_clean_dispatches():
 
 
 def test_clean_force_flag_dispatches():
-    mocks = _run(["clean samtools:1.21 --force", "exit"])
-    mocks["clean"].assert_called_once_with("samtools:1.21", force=True)
-
-
-def test_clean_force_short_flag_dispatches():
     mocks = _run(["clean samtools:1.21 -y", "exit"])
     mocks["clean"].assert_called_once_with("samtools:1.21", force=True)
 

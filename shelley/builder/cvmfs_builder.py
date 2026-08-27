@@ -488,15 +488,20 @@ class CVMFSModuleBuilder:
         Uninstall a specific tool@version: the inverse of shpc_install.
 
         Runs `shpc uninstall --force` for the shpc-managed module/wrapper/container
-        artifacts, removes the Lmod modulefile symlink shelley creates directly (shpc
-        has no knowledge of it), and prunes the matching tag from a local registry
-        entry if shelley created one for this tool.
+        artifacts, and removes the Lmod modulefile symlink shelley creates directly
+        (shpc has no knowledge of it) — pruning its parent tool directory too, if
+        that was the last version installed for this tool.
 
-        A local registry entry (local_registry()/<uri>/container.yaml) is only ever
-        written by _ensure_local_registry_entry, so if it exists at all it is entirely
-        shelley-owned: pruning just the tag for this version is safe regardless of
-        what else is in the file. The whole file is deleted only when that was the
-        last remaining tag.
+        Deliberately leaves local_registry()/<uri>/container.yaml untouched. That
+        file is not exclusively "owned" by one installed version the way the
+        modulefile symlink is: _load_registry_config also writes it as a cache of
+        the *entire* upstream shpc-registry the first time anything calls
+        get_registry_tags (e.g. `shelley find`, or version resolution during
+        `shelley build`), and even _ensure_local_registry_entry's own writes start
+        from a fresh curl of that same full upstream file. Deleting a tag from it on
+        uninstall would risk corrupting metadata that other installed versions and
+        unrelated commands still rely on, for no actual benefit — the file has no
+        bearing on whether a module is installed.
 
         Does not raise if `shpc uninstall` fails (e.g. shpc's own tracking already
         lost the entry) — shelley's own state is independent and still gets cleaned
@@ -508,8 +513,6 @@ class CVMFSModuleBuilder:
                 "shpc_removed": bool,
                 "shpc_output": str,
                 "modulefile_removed": bool,
-                "registry_tag_removed": bool,
-                "registry_entry_deleted": bool,
             }
         """
         uri = f"quay.io/biocontainers/{tool_name}"
@@ -520,38 +523,22 @@ class CVMFSModuleBuilder:
         if not shpc_removed:
             log.warning("shpc uninstall reported rc=%s for %s: %s", returncode, uri_tag, output.strip())
 
-        dest = self.lmod_modules_path / tool_name / f"{version}.lua"
+        tool_dir = self.lmod_modules_path / tool_name
+        dest = tool_dir / f"{version}.lua"
         modulefile_removed = False
         if dest.is_symlink() or dest.exists():
             dest.unlink()
             modulefile_removed = True
-
-        registry_tag_removed = False
-        registry_entry_deleted = False
-        registry_yaml = gl.local_registry() / uri / "container.yaml"
-        if registry_yaml.is_file():
-            with open(registry_yaml) as f:
-                config = yaml.safe_load(f) or {}
-            tags = config.get("tags", {}) or {}
-            if version in tags:
-                del tags[version]
-                registry_tag_removed = True
-                if tags:
-                    config["tags"] = tags
-                    with open(registry_yaml, "w") as f:
-                        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-                    share_file(registry_yaml)
-                else:
-                    registry_yaml.unlink()
-                    registry_entry_deleted = True
+            try:
+                tool_dir.rmdir()
+            except OSError:
+                pass  # other versions of this tool are still installed
 
         return {
             "uri_tag": uri_tag,
             "shpc_removed": shpc_removed,
             "shpc_output": output,
             "modulefile_removed": modulefile_removed,
-            "registry_tag_removed": registry_tag_removed,
-            "registry_entry_deleted": registry_entry_deleted,
         }
 
     def list_versions(self, tool_name: str) -> List[str]:

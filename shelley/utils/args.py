@@ -39,13 +39,13 @@ def parse_build_flags(args: list[str]) -> tuple[bool, list[str]]:
 def parse_force_flag(args: list[str]) -> tuple[bool, list[str]]:
     """Split ``clean`` flags from positional args.
 
-    Recognises ``--force``/``-y``, which skips the interactive removal confirmation.
+    Recognises ``-y``, which skips the interactive removal confirmation.
     Returns ``(force, positionals)``.
     """
     force = False
     positional: list[str] = []
     for arg in args:
-        if arg in ("--force", "-y"):
+        if arg == "-y":
             force = True
         else:
             positional.append(arg)

@@ -104,49 +104,57 @@ def test_uninstall_dangling_symlink_only(builder):
     assert not link.is_symlink()
 
 
-def test_uninstall_removes_only_matching_tag_when_multiple_tags_present(builder):
+def test_uninstall_prunes_the_now_empty_tool_directory(builder):
+    """The parent tool dir under lmod_modules must not linger once its last version goes."""
+    link_dir = builder.lmod_modules_path / TOOL
+    link_dir.mkdir(parents=True)
+    (link_dir / f"{VERSION}.lua").symlink_to(link_dir / "does-not-exist.lua")
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
+        builder.uninstall_module(TOOL, VERSION)
+
+    assert not link_dir.exists()
+
+
+def test_uninstall_keeps_the_tool_directory_when_other_versions_remain(builder):
     other_version = "1.20--abc"
-    registry_yaml = _registry_yaml({VERSION: "sha256:aaa", other_version: "sha256:bbb"})
+    link_dir = builder.lmod_modules_path / TOOL
+    link_dir.mkdir(parents=True)
+    (link_dir / f"{VERSION}.lua").symlink_to(link_dir / "does-not-exist.lua")
+    (link_dir / f"{other_version}.lua").symlink_to(link_dir / "also-missing.lua")
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
-        report = builder.uninstall_module(TOOL, VERSION)
+        builder.uninstall_module(TOOL, VERSION)
 
-    assert report["registry_tag_removed"] is True
-    assert report["registry_entry_deleted"] is False
-    assert registry_yaml.is_file()
-    config = yaml.safe_load(registry_yaml.read_text())
-    assert config["tags"] == {other_version: "sha256:bbb"}
-    assert config["aliases"]
+    assert link_dir.is_dir()
+    assert (link_dir / f"{other_version}.lua").is_symlink()
 
 
-def test_uninstall_deletes_whole_registry_entry_when_last_tag_removed(builder):
-    registry_yaml = _registry_yaml({VERSION: "sha256:aaa"})
+def test_uninstall_never_touches_the_local_registry_cache(builder):
+    """container.yaml is a shared upstream cache/mirror, not per-version state — clean
+    must leave it byte-for-byte alone, even when it happens to list this version."""
+    registry_yaml = _registry_yaml({VERSION: "sha256:aaa", "1.20--abc": "sha256:bbb"})
+    before = registry_yaml.read_text()
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
-        report = builder.uninstall_module(TOOL, VERSION)
+        builder.uninstall_module(TOOL, VERSION)
 
-    assert report["registry_entry_deleted"] is True
-    assert not registry_yaml.exists()
-
-
-def test_uninstall_is_a_noop_for_registry_when_no_local_entry_exists(builder):
-    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
-        report = builder.uninstall_module(TOOL, VERSION)
-
-    assert report["registry_tag_removed"] is False
-    assert report["registry_entry_deleted"] is False
+    assert registry_yaml.read_text() == before
 
 
-def test_uninstall_leaves_shelley_state_clean_even_when_shpc_uninstall_fails(builder):
-    """The two cleanup paths are independent: a failed shpc call must not block the rest."""
-    registry_yaml = _registry_yaml({VERSION: "sha256:aaa"})
+def test_uninstall_removes_shelley_state_even_when_shpc_uninstall_fails(builder):
+    """shpc failing to find its own entry must not block the rest of the cleanup."""
+    link_dir = builder.lmod_modules_path / TOOL
+    link_dir.mkdir(parents=True)
+    link = link_dir / f"{VERSION}.lua"
+    link.symlink_to(link_dir / "does-not-exist.lua")
 
     with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(1, "boom")):
         report = builder.uninstall_module(TOOL, VERSION)
 
     assert report["shpc_removed"] is False
-    assert report["registry_tag_removed"] is True
-    assert not registry_yaml.exists()
+    assert report["modulefile_removed"] is True
+    assert not link_dir.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -202,8 +210,7 @@ def mock_clean_builder():
     fake_builder = MagicMock(spec=CVMFSModuleBuilder)
     fake_builder.uninstall_module.return_value = {
         "uri_tag": URI_TAG, "shpc_removed": True, "shpc_output": "",
-        "modulefile_removed": True, "registry_tag_removed": False,
-        "registry_entry_deleted": False,
+        "modulefile_removed": True,
     }
 
     with patch("shelley.commands.clean.CVMFSModuleBuilder", return_value=fake_builder), \
@@ -230,8 +237,7 @@ def test_clean_module_warns_when_shpc_uninstall_reports_failure(mock_clean_build
     _touch_modulefile(TOOL, VERSION)
     mock_clean_builder.uninstall_module.return_value = {
         "uri_tag": URI_TAG, "shpc_removed": False, "shpc_output": "boom",
-        "modulefile_removed": True, "registry_tag_removed": False,
-        "registry_entry_deleted": False,
+        "modulefile_removed": True,
     }
 
     with patch("shelley.commands.clean.ShelleyStyle.create_warning_panel") as mock_warning:
@@ -293,7 +299,7 @@ def test_clean_module_prompts_when_not_forced_and_user_confirms(mock_clean_build
 
 def test_clean_module_reexecs_under_sudo_with_force_and_resolved_full_version():
     """The short version is resolved and confirmation happens before the re-exec;
-    the elevated child is always invoked with --force."""
+    the elevated child is always invoked with -y."""
     _touch_modulefile(TOOL, VERSION)
 
     with patch("shelley.commands.clean.needs_sudo", return_value=True), \
@@ -305,7 +311,7 @@ def test_clean_module_reexecs_under_sudo_with_force_and_resolved_full_version():
 
     assert result is True
     cmd = mock_run.call_args[0][0]
-    assert cmd[-3:] == ["clean", f"{TOOL}:{VERSION}", "--force"]
+    assert cmd[-3:] == ["clean", f"{TOOL}:{VERSION}", "-y"]
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +336,7 @@ def test_cli_clean_missing_args_exits_with_usage(monkeypatch):
 def test_cli_clean_dispatches_to_clean_module(monkeypatch):
     from shelley.client.cli import main
 
-    monkeypatch.setattr(sys, "argv", ["shelley", "clean", f"{TOOL}:{VERSION}", "--force"])
+    monkeypatch.setattr(sys, "argv", ["shelley", "clean", f"{TOOL}:{VERSION}", "-y"])
 
     with patch("shelley.client.cli.clean_module", return_value=True) as mock_clean:
         with pytest.raises(SystemExit) as exc:

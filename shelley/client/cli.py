@@ -80,7 +80,7 @@ def main() -> None:
         force, positional = parse_force_flag(sys.argv[2:])
         if not positional:
             print_warning("Missing tool name or version")
-            print_info("Usage: [command]shelley clean <tool>:<version> [--force|-y][/command]")
+            print_info("Usage: [command]shelley clean <tool>:<version> [-y][/command]")
             print_info("Example: [command]shelley clean samtools:1.21[/command]")
             sys.exit(1)
         sys.exit(0 if clean_module(positional[0], force=force) else 1)

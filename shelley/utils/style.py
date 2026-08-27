@@ -278,10 +278,6 @@ class ShelleyStyle:
             removed.append("shpc module, wrappers and container artifacts")
         if report.get("modulefile_removed"):
             removed.append("Lmod modulefile symlink")
-        if report.get("registry_entry_deleted"):
-            removed.append("local registry entry (last remaining version)")
-        elif report.get("registry_tag_removed"):
-            removed.append("local registry tag")
         removed_text = "\n".join(f"  [muted]• {item}[/muted]" for item in removed) or \
             "  [muted]• nothing further to remove[/muted]"
 
@@ -384,6 +380,8 @@ class ShelleyStyle:
             ("Search for RNA-seq tools", "shelley search 'RNA sequencing'"),
             ("Build latest version", "shelley build samtools"),
             ("Build specific version", "shelley build samtools/1.21"),
+            ("Uninstall a tool version", "shelley clean samtools:1.21"),
+            ("Uninstall without confirming", "shelley clean samtools:1.21 -y"),
             ("Interactive mode", "shelley interactive")
         ]
         

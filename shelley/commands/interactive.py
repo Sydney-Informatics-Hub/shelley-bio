@@ -65,6 +65,6 @@ def interactive_mode() -> None:
             if positional:
                 clean_module(positional[0], force=force)
             else:
-                print_warning("Usage: clean <tool>:<version> [--force|-y]")
+                print_warning("Usage: clean <tool>:<version> [-y]")
         else:
             print_warning(f"Unknown command: '{cmd}'. Type help for usage.")

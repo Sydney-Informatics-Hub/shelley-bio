@@ -72,12 +72,12 @@ def _not_installed_panel(
 def clean_module(tool_spec: str, force: bool = False) -> bool:
     """Uninstall a specific tool@version. Requires an explicit version.
 
-    Confirms interactively before deleting anything, unless force=True (the
-    --force/-y flag). Version resolution and the confirmation prompt both happen
-    before any sudo re-exec, so a bad/ambiguous/missing version is reported without
-    ever asking for a password, and the confirmation runs in the process attached to
+    Confirms interactively before deleting anything, unless force=True (the -y
+    flag). Version resolution and the confirmation prompt both happen before any
+    sudo re-exec, so a bad/ambiguous/missing version is reported without ever
+    asking for a password, and the confirmation runs in the process attached to
     the user's terminal rather than racing sudo's own prompt on the same TTY. The
-    re-exec'd child is always invoked with --force, since confirmation already
+    re-exec'd child is always invoked with -y, since confirmation already
     happened in the parent.
 
     Returns True if tool@version was cleaned, False on error or user decline.
@@ -112,7 +112,7 @@ def clean_module(tool_spec: str, force: bool = False) -> bool:
 
         cmd = [
             "sudo", "-E", "env", *sudo_env_args(),
-            *launcher, "clean", f"{tool_name}:{version}", "--force",
+            *launcher, "clean", f"{tool_name}:{version}", "-y",
         ]
         try:
             print_info(f"Running with elevated privileges: clean {tool_name}:{version}")
@@ -143,8 +143,7 @@ def clean_module(tool_spec: str, force: bool = False) -> bool:
         console.print(ShelleyStyle.create_warning_panel(
             "shpc uninstall reported an issue",
             f"{report['uri_tag']}: {(report['shpc_output'] or '').strip() or 'non-zero exit'} "
-            "— shelley-managed state (modulefile symlink, local registry entry) was "
-            "still cleaned up.",
+            "— the Lmod modulefile symlink was still cleaned up.",
         ))
 
     console.print(ShelleyStyle.create_clean_success(tool_name, version, report))
