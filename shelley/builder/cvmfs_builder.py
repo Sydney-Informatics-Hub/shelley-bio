@@ -338,9 +338,16 @@ class CVMFSModuleBuilder:
 
         return aliases
 
+    def _run_shpc_uninstall(self, uri_tag: str) -> Tuple[int, str]:
+        """Run `shpc uninstall --force <uri_tag>`. Returns (returncode, combined output)."""
+        result = subprocess.run(
+            _shpc_cmd("uninstall", "--force", uri_tag), capture_output=True, text=True,
+        )
+        return result.returncode, result.stdout + result.stderr
+
     def _shpc_uninstall(self, uri_tag: str) -> None:
         """Uninstall an existing shpc entry (best-effort; ignores errors)."""
-        subprocess.run(_shpc_cmd("uninstall", "--force", uri_tag), capture_output=True, text=True)
+        self._run_shpc_uninstall(uri_tag)
 
     def _shpc_module_base(self) -> Path:
         """Ask shpc where it installed the module.
@@ -475,6 +482,77 @@ class CVMFSModuleBuilder:
             ))
 
         return dest
+
+    def uninstall_module(self, tool_name: str, version: str) -> dict:
+        """
+        Uninstall a specific tool@version: the inverse of shpc_install.
+
+        Runs `shpc uninstall --force` for the shpc-managed module/wrapper/container
+        artifacts, removes the Lmod modulefile symlink shelley creates directly (shpc
+        has no knowledge of it), and prunes the matching tag from a local registry
+        entry if shelley created one for this tool.
+
+        A local registry entry (local_registry()/<uri>/container.yaml) is only ever
+        written by _ensure_local_registry_entry, so if it exists at all it is entirely
+        shelley-owned: pruning just the tag for this version is safe regardless of
+        what else is in the file. The whole file is deleted only when that was the
+        last remaining tag.
+
+        Does not raise if `shpc uninstall` fails (e.g. shpc's own tracking already
+        lost the entry) — shelley's own state is independent and still gets cleaned
+        up. Returns a report describing exactly what was removed, for the caller to
+        render:
+
+            {
+                "uri_tag": str,
+                "shpc_removed": bool,
+                "shpc_output": str,
+                "modulefile_removed": bool,
+                "registry_tag_removed": bool,
+                "registry_entry_deleted": bool,
+            }
+        """
+        uri = f"quay.io/biocontainers/{tool_name}"
+        uri_tag = f"{uri}:{version}"
+
+        returncode, output = self._run_shpc_uninstall(uri_tag)
+        shpc_removed = returncode == 0
+        if not shpc_removed:
+            log.warning("shpc uninstall reported rc=%s for %s: %s", returncode, uri_tag, output.strip())
+
+        dest = self.lmod_modules_path / tool_name / f"{version}.lua"
+        modulefile_removed = False
+        if dest.is_symlink() or dest.exists():
+            dest.unlink()
+            modulefile_removed = True
+
+        registry_tag_removed = False
+        registry_entry_deleted = False
+        registry_yaml = gl.local_registry() / uri / "container.yaml"
+        if registry_yaml.is_file():
+            with open(registry_yaml) as f:
+                config = yaml.safe_load(f) or {}
+            tags = config.get("tags", {}) or {}
+            if version in tags:
+                del tags[version]
+                registry_tag_removed = True
+                if tags:
+                    config["tags"] = tags
+                    with open(registry_yaml, "w") as f:
+                        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+                    share_file(registry_yaml)
+                else:
+                    registry_yaml.unlink()
+                    registry_entry_deleted = True
+
+        return {
+            "uri_tag": uri_tag,
+            "shpc_removed": shpc_removed,
+            "shpc_output": output,
+            "modulefile_removed": modulefile_removed,
+            "registry_tag_removed": registry_tag_removed,
+            "registry_entry_deleted": registry_entry_deleted,
+        }
 
     def list_versions(self, tool_name: str) -> List[str]:
         """

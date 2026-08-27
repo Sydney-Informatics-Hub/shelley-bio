@@ -16,4 +16,7 @@ CORE_COMMANDS = [
     {"command": r"build <tool\[/version]> [-i]",
      "description": "Build Lmod module for tool; -i/--interactive to curate aliases",
      "example": "build samtools/1.21"},
+    {"command": r"clean <tool>:<version> [--force|-y]",
+     "description": "Uninstall a specific tool version; requires an explicit version",
+     "example": "clean samtools:1.21"},
 ]
