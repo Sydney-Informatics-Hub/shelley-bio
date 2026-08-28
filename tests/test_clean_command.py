@@ -131,8 +131,9 @@ def test_uninstall_keeps_the_tool_directory_when_other_versions_remain(builder):
 
 
 def test_uninstall_never_touches_the_local_registry_cache(builder):
-    """container.yaml is a shared upstream cache/mirror, not per-version state — clean
-    must leave it byte-for-byte alone, even when it happens to list this version."""
+    """Without a marker directory, container.yaml is a shared upstream cache/mirror,
+    not per-version state — clean must leave it byte-for-byte alone, even when it
+    happens to list this version."""
     registry_yaml = _registry_yaml({VERSION: "sha256:aaa", "1.20--abc": "sha256:bbb"})
     before = registry_yaml.read_text()
 
@@ -140,6 +141,39 @@ def test_uninstall_never_touches_the_local_registry_cache(builder):
         builder.uninstall_module(TOOL, VERSION)
 
     assert registry_yaml.read_text() == before
+
+
+def test_uninstall_prunes_the_tag_when_a_marker_directory_proves_it_was_local(builder):
+    """A registry_dir/<version>/ marker (left by _ensure_local_registry_entry when the
+    tag was absent upstream) proves this one tag is safe to remove — everything else
+    in container.yaml must be left alone, and the file itself is never deleted."""
+    other_version = "1.20--abc"
+    registry_yaml = _registry_yaml({VERSION: "sha256:aaa", other_version: "sha256:bbb"})
+    marker_dir = gl.local_registry() / URI / VERSION
+    marker_dir.mkdir(parents=True)
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
+        report = builder.uninstall_module(TOOL, VERSION)
+
+    assert report["registry_tag_removed"] is True
+    assert not marker_dir.exists()
+    assert registry_yaml.is_file()
+    config = yaml.safe_load(registry_yaml.read_text())
+    assert config["tags"] == {other_version: "sha256:bbb"}
+    assert config["aliases"]
+
+
+def test_uninstall_marker_present_but_no_container_yaml_is_a_noop(builder):
+    """A leftover marker with no container.yaml (already removed by hand, say) must
+    not raise."""
+    marker_dir = gl.local_registry() / URI / VERSION
+    marker_dir.mkdir(parents=True)
+
+    with patch("shelley.builder.cvmfs_builder.subprocess.run", side_effect=_fake_run(0, "")):
+        report = builder.uninstall_module(TOOL, VERSION)
+
+    assert report["registry_tag_removed"] is False
+    assert not marker_dir.exists()
 
 
 def test_uninstall_removes_shelley_state_even_when_shpc_uninstall_fails(builder):

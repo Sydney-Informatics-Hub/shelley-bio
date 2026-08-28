@@ -278,6 +278,8 @@ class ShelleyStyle:
             removed.append("shpc module, wrappers and container artifacts")
         if report.get("modulefile_removed"):
             removed.append("Lmod modulefile symlink")
+        if report.get("registry_tag_removed"):
+            removed.append("local registry tag (was added locally, not upstream)")
         removed_text = "\n".join(f"  [muted]• {item}[/muted]" for item in removed) or \
             "  [muted]• nothing further to remove[/muted]"
 
